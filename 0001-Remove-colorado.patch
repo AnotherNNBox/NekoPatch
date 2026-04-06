@@ -1,0 +1,582 @@
+From 327f5f6604d1dad7ef46ccf3b1a2681473a4cc5d Mon Sep 17 00:00:00 2001
+From: LittleChest <hiya@littlew.top>
+Date: Fri, 3 Apr 2026 23:01:02 +0800
+Subject: Remove colorado
+
+---
+ TMessagesProj/jni/CMakeLists.txt          |   2 -
+ TMessagesProj/jni/colorado/CMakeLists.txt |   8 -
+ TMessagesProj/jni/colorado/cert.cpp       | 204 ----------------------
+ TMessagesProj/jni/colorado/colorado.cpp   |  57 ------
+ TMessagesProj/jni/colorado/colorado.h     |  18 --
+ TMessagesProj/jni/colorado/logging.h      |  32 ----
+ TMessagesProj/jni/colorado/obfs-string.h  |  88 ----------
+ TMessagesProj/jni/colorado/utils.cpp      |  37 ----
+ TMessagesProj/jni/colorado/utils.h        |  11 --
+ TMessagesProj/jni/jni.c                   |   6 -
+ 10 files changed, 463 deletions(-)
+ delete mode 100644 TMessagesProj/jni/colorado/CMakeLists.txt
+ delete mode 100644 TMessagesProj/jni/colorado/cert.cpp
+ delete mode 100644 TMessagesProj/jni/colorado/colorado.cpp
+ delete mode 100644 TMessagesProj/jni/colorado/colorado.h
+ delete mode 100644 TMessagesProj/jni/colorado/logging.h
+ delete mode 100644 TMessagesProj/jni/colorado/obfs-string.h
+ delete mode 100644 TMessagesProj/jni/colorado/utils.cpp
+ delete mode 100644 TMessagesProj/jni/colorado/utils.h
+
+diff --git a/TMessagesProj/jni/CMakeLists.txt b/TMessagesProj/jni/CMakeLists.txt
+index c9e440878..b31344b73 100644
+--- a/TMessagesProj/jni/CMakeLists.txt
++++ b/TMessagesProj/jni/CMakeLists.txt
+@@ -324,7 +324,6 @@ target_compile_definitions(sqlite PUBLIC
+ 
+ #voip
+ include(${CMAKE_HOME_DIRECTORY}/voip/CMakeLists.txt)
+-include(${CMAKE_HOME_DIRECTORY}/colorado/CMakeLists.txt)
+ 
+ set(NATIVE_LIB "neko.49")
+ 
+@@ -635,7 +634,6 @@ target_link_libraries(${NATIVE_LIB}
+         EGL
+         android
+         OpenSLES
+-        colorado
+         cpufeatures)
+ 
+ #if (${ANDROID_ABI} STREQUAL "x86" OR ${ANDROID_ABI} STREQUAL "x86_64")
+diff --git a/TMessagesProj/jni/colorado/CMakeLists.txt b/TMessagesProj/jni/colorado/CMakeLists.txt
+deleted file mode 100644
+index 69d0f90cc..000000000
+--- a/TMessagesProj/jni/colorado/CMakeLists.txt
++++ /dev/null
+@@ -1,8 +0,0 @@
+-add_library(colorado STATIC
+-        colorado/cert.cpp
+-        colorado/colorado.cpp
+-        colorado/utils.cpp
+-)
+-target_include_directories(colorado PUBLIC colorado/)
+-target_compile_options(colorado PUBLIC -Oz -fvisibility=hidden)
+-target_include_directories(colorado PUBLIC integrity)
+diff --git a/TMessagesProj/jni/colorado/cert.cpp b/TMessagesProj/jni/colorado/cert.cpp
+deleted file mode 100644
+index bbfb99787..000000000
+--- a/TMessagesProj/jni/colorado/cert.cpp
++++ /dev/null
+@@ -1,204 +0,0 @@
+-#include <unistd.h>
+-
+-#include "logging.h"
+-#include "utils.h"
+-
+-
+-using namespace std;
+-
+-#define APK_SIGNING_BLOCK_MAGIC          "APK Sig Block 42"
+-#define APK_SIGNATURE_SCHEME_V2_BLOCK_ID 0x7109871a
+-#define EOCD_MAGIC                       0x6054b50
+-
+-
+-// Top-level block container
+-struct signing_block {
+-    uint64_t block_sz;
+-
+-    struct id_value_pair {
+-        uint64_t len;
+-        struct /* v2_signature */ {
+-            uint32_t id;
+-            uint8_t value[0];  // size = (len - 4)
+-        };
+-    } id_value_pair_sequence[0];
+-
+-    uint64_t block_sz_;   // *MUST* be same as block_sz
+-    char magic[16];       // "APK Sig Block 42"
+-};
+-
+-struct len_prefixed {
+-    uint32_t len;
+-};
+-
+-// Generic length prefixed raw data
+-struct len_prefixed_value : public len_prefixed {
+-    uint8_t value[0];
+-};
+-
+-// V2 Signature Block
+-struct v2_signature {
+-    uint32_t id;  // 0x7109871a
+-    uint32_t signer_sequence_len;
+-    struct signer : public len_prefixed {
+-        struct signed_data : public len_prefixed {
+-            uint32_t digest_sequence_len;
+-            struct : public len_prefixed {
+-                uint32_t algorithm;
+-                len_prefixed_value digest;
+-            } digest_sequence[0];
+-
+-            uint32_t certificate_sequence_len;
+-            len_prefixed_value certificate_sequence[0];
+-
+-            uint32_t attribute_sequence_len;
+-            struct attribute : public len_prefixed {
+-                uint32_t id;
+-                uint8_t value[0];  // size = (len - 4)
+-            } attribute_sequence[0];
+-        } signed_data;
+-
+-        uint32_t signature_sequence_len;
+-        struct : public len_prefixed {
+-            uint32_t id;
+-            len_prefixed_value signature;
+-        } signature_sequence[0];
+-
+-        len_prefixed_value public_key;
+-    } signer_sequence[0];
+-};
+-
+-// End of central directory record
+-struct EOCD {
+-    uint32_t magic;            // 0x6054b50
+-    uint8_t pad[8];            // 8 bytes of irrelevant data
+-    uint32_t central_dir_sz;   // size of central directory
+-    uint32_t central_dir_off;  // offset of central directory
+-    uint16_t comment_sz;       // size of comment
+-    char comment[0];
+-} __attribute__((packed));
+-
+-/*
+- * A v2/v3 signed APK has the format as following
+- *
+- * +---------------+
+- * | zip content   |
+- * +---------------+
+- * | signing block |
+- * +---------------+
+- * | central dir   |
+- * +---------------+
+- * | EOCD          |
+- * +---------------+
+- *
+- * Scan from end of file to find EOCD, and figure our way back to the
+- * offset of the signing block. Next, directly extract the certificate
+- * from the v2 signature block.
+- *
+- * All structures above are mostly just for documentation purpose.
+- *
+- * This method extracts the first certificate of the first signer
+- * within the APK v2 signature block.
+- */
+-string read_certificate(int fd) {
+-    uint32_t u32;
+-    uint64_t u64;
+-
+-    // Find EOCD
+-    for (int i = 0;; i++) {
+-        // i is the absolute offset to end of file
+-        uint16_t comment_sz = 0;
+-        lseek64(fd, -static_cast<off64_t>(sizeof(comment_sz)) - i, SEEK_END);
+-        xxread(fd, &comment_sz, sizeof(comment_sz));
+-        if (comment_sz == i) {
+-            // Double check if we actually found the structure
+-            lseek64(fd, -static_cast<off64_t>(sizeof(EOCD)), SEEK_CUR);
+-            uint32_t magic = 0;
+-            xxread(fd, &magic, sizeof(magic));
+-            if (magic == EOCD_MAGIC) {
+-                break;
+-            }
+-        }
+-        if (i == 0xffff) {
+-            // Comments cannot be longer than 0xffff (overflow), abort
+-            LOGE("cert: invalid APK format");
+-            return {};
+-        }
+-    }
+-
+-    // We are now at EOCD + sizeof(magic)
+-    // Seek and read central_dir_off to find start of central directory
+-    uint32_t central_dir_off = 0;
+-    {
+-        constexpr off64_t off = offsetof(EOCD, central_dir_off) - sizeof(EOCD::magic);
+-        lseek64(fd, off, SEEK_CUR);
+-    }
+-    xxread(fd, &central_dir_off, sizeof(central_dir_off));
+-
+-    // Next, find the start of the APK signing block
+-    {
+-        constexpr int off = sizeof(signing_block::block_sz_) + sizeof(signing_block::magic);
+-        lseek64(fd, (off64_t) (central_dir_off - off), SEEK_SET);
+-    }
+-    xxread(fd, &u64, sizeof(u64));  // u64 = block_sz_
+-    char magic[sizeof(signing_block::magic)] = {0};
+-    xxread(fd, magic, sizeof(magic));
+-    if (memcmp(magic, APK_SIGNING_BLOCK_MAGIC, sizeof(magic)) != 0) {
+-        // Invalid signing block magic, abort
+-        LOGE("cert: invalid signing block magic");
+-        return {};
+-    }
+-    uint64_t signing_blk_sz = 0;
+-    lseek64(fd, -static_cast<off64_t>(u64 + sizeof(signing_blk_sz)), SEEK_CUR);
+-    xxread(fd, &signing_blk_sz, sizeof(signing_blk_sz));
+-    if (signing_blk_sz != u64) {
+-        // block_sz != block_sz_, invalid signing block format, abort
+-        LOGE("cert: invalid signing block format");
+-        return {};
+-    }
+-
+-    // Finally, we are now at the beginning of the id-value pair sequence
+-
+-    string cert;
+-    for (;;) {
+-        xxread(fd, &u64, sizeof(u64)); // id-value pair length
+-        if (u64 == signing_blk_sz) {
+-            // Outside of the id-value pair sequence; actually reading block_sz_
+-            break;
+-        }
+-
+-        auto p = lseek64(fd, 0, SEEK_CUR);
+-
+-        uint32_t id;
+-        xxread(fd, &id, sizeof(id));
+-        if (id == APK_SIGNATURE_SCHEME_V2_BLOCK_ID) {
+-            if (!cert.empty()) {
+-                LOGE("cert: multiple signatures found");
+-                return {};
+-            }
+-
+-            // Skip [signer sequence length] + [1st signer length] + [signed data length]
+-            lseek64(fd, sizeof(uint32_t) * 3, SEEK_CUR);
+-
+-            xxread(fd, &u32, sizeof(u32)); // digest sequence length
+-            lseek64(fd, u32, SEEK_CUR);     // skip all digests
+-
+-            lseek64(fd, sizeof(uint32_t), SEEK_CUR); // cert sequence length
+-            xxread(fd, &u32, sizeof(u32));          // 1st cert length
+-
+-            cert.resize(u32);
+-            xxread(fd, cert.data(), u32);
+-
+-            // Skip remaining data
+-            lseek64(fd, p + u64, SEEK_SET);
+-        } else {
+-            // Skip this id-value pair
+-            lseek64(fd, p + u64, SEEK_SET);
+-        }
+-    }
+-
+-    if (cert.empty()) {
+-        LOGE("cert: cannot find certificate");
+-    }
+-    return cert;
+-}
+\ No newline at end of file
+diff --git a/TMessagesProj/jni/colorado/colorado.cpp b/TMessagesProj/jni/colorado/colorado.cpp
+deleted file mode 100644
+index 9061a17be..000000000
+--- a/TMessagesProj/jni/colorado/colorado.cpp
++++ /dev/null
+@@ -1,57 +0,0 @@
+-#include <string_view>
+-#include <dirent.h>
+-#include <unistd.h>
+-#include <zlib.h>
+-
+-#include "colorado.h"
+-#include "logging.h"
+-#include "obfs-string.h"
+-#include "utils.h"
+-
+-void kill_self() {
+-    kill(getpid(), SIGKILL);
+-}
+-
+-bool check_signature() {
+-    std::hash<std::string> hasher;
+-    DIR *dir = opendir("/proc/self/fd"_iobfs.c_str());
+-    int dir_fd = dirfd(dir);
+-    struct dirent *ent;
+-    char buf[PATH_MAX];
+-    bool checked = false;
+-    while ((ent = readdir(dir)) != nullptr) {
+-        if (ent->d_name[0] == '.') continue;
+-
+-        ssize_t len = readlinkat(dir_fd, ent->d_name, buf, PATH_MAX);
+-        if (len <= 0) {
+-            continue;
+-        }
+-
+-        std::string_view real_path(buf, len);
+-        if (!starts_with(real_path, "/data/app/"_iobfs.c_str()) ||
+-            !ends_with(real_path, ".apk"_iobfs.c_str()) ||
+-            !contains(real_path, PACKAGE_NAME)) {
+-            continue;
+-        }
+-
+-        std::string cert = read_certificate(atoi(ent->d_name));
+-        size_t size = cert.size();
+-        uLong crc = crc32(0, (unsigned const char *) cert.data(), cert.length());
+-        if (size == CERT_SIZE && crc == CERT_HASH) {
+-            checked = true;
+-        } else {
+-#ifndef NDEBUG
+-            LOGE("colorado: mismatch, expected %zx and %zx got %zx and %lx",
+-                 CERT_SIZE, CERT_HASH,
+-                 size, crc);
+-#endif
+-            checked = false;
+-            break;
+-        }
+-    }
+-    closedir(dir);
+-    if (!checked) {
+-        kill_self();
+-    }
+-    return checked;
+-}
+\ No newline at end of file
+diff --git a/TMessagesProj/jni/colorado/colorado.h b/TMessagesProj/jni/colorado/colorado.h
+deleted file mode 100644
+index c78676d57..000000000
+--- a/TMessagesProj/jni/colorado/colorado.h
++++ /dev/null
+@@ -1,18 +0,0 @@
+-#include <stdbool.h>
+-
+-#ifdef NDEBUG
+-#define LOG_DISABLED
+-#endif
+-#define PACKAGE_NAME "tw.nekomimi.nekogram"_iobfs.c_str()
+-#define CERT_HASH 0x693cc8c5
+-#define CERT_SIZE 0x2d7
+-
+-#ifdef __cplusplus
+-extern "C" {
+-#endif
+-
+-bool check_signature();
+-
+-#ifdef __cplusplus
+-}
+-#endif
+\ No newline at end of file
+diff --git a/TMessagesProj/jni/colorado/logging.h b/TMessagesProj/jni/colorado/logging.h
+deleted file mode 100644
+index d3df70b2b..000000000
+--- a/TMessagesProj/jni/colorado/logging.h
++++ /dev/null
+@@ -1,32 +0,0 @@
+-#ifndef _LOGGING_H
+-#define _LOGGING_H
+-
+-#include <android/log.h>
+-#include <errno.h>
+-
+-#ifndef LOG_TAG
+-#define LOG_TAG    "Colorado"
+-#endif
+-
+-#ifdef LOG_DISABLED
+-#define LOGD(...) 0
+-#define LOGV(...) 0
+-#define LOGI(...) 0
+-#define LOGW(...) 0
+-#define LOGE(...) 0
+-#else
+-#ifndef NDEBUG
+-#define LOGD(fmt, ...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "%s:%d#%s" ": " fmt, __FILE_NAME__, __LINE__, __PRETTY_FUNCTION__ __VA_OPT__(,) __VA_ARGS__)
+-#define LOGV(fmt, ...) __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, "%s:%d#%s" ": " fmt, __FILE_NAME__, __LINE__, __PRETTY_FUNCTION__ __VA_OPT__(,) __VA_ARGS__)
+-#else
+-#define LOGD(...) 0
+-#define LOGV(...) 0
+-#endif
+-#define LOGI(...)  __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+-#define LOGW(...)  __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+-#define LOGE(...)  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+-#define LOGF(...)  __android_log_print(ANDROID_LOG_FATAL, LOG_TAG, __VA_ARGS__)
+-#define PLOGE(fmt, args...) LOGE(fmt " failed with %d: %s", ##args, errno, strerror(errno))
+-#endif
+-
+-#endif // _LOGGING_H
+\ No newline at end of file
+diff --git a/TMessagesProj/jni/colorado/obfs-string.h b/TMessagesProj/jni/colorado/obfs-string.h
+deleted file mode 100644
+index 4eaad752a..000000000
+--- a/TMessagesProj/jni/colorado/obfs-string.h
++++ /dev/null
+@@ -1,88 +0,0 @@
+-#pragma clang diagnostic push
+-#pragma clang diagnostic ignored "-Wgnu-string-literal-operator-template"
+-
+-#include <utility>
+-#include <string_view>
+-
+-#if __cplusplus >= 202002L
+-#define CONSTEVAL consteval
+-#else
+-#define CONSTEVAL constexpr
+-#endif
+-
+-CONSTEVAL bool isPrime(std::size_t x) {
+-    if (x == 2 || x == 3)
+-        return true;
+-
+-    if (x % 2 == 0 || x % 3 == 0)
+-        return false;
+-
+-    std::size_t divisor = 6;
+-    while (divisor * divisor - 2 * divisor + 1 <= x) {
+-
+-        if (x % (divisor - 1) == 0)
+-            return false;
+-
+-        if (x % (divisor + 1) == 0)
+-            return false;
+-
+-        divisor += 6;
+-    }
+-    return true;
+-}
+-
+-CONSTEVAL std::size_t nextPrime(std::size_t x) {
+-    while (!isPrime(x)) ++x;
+-    return x;
+-}
+-
+-template<char... cs>
+-class InlineObfs {
+-private:
+-    char inner[sizeof...(cs) + 1];
+-
+-public:
+-    inline InlineObfs() : inner{cs..., '\0'} {
+-        for (std::size_t i = 0; i < sizeof...(cs); ++i) {
+-            inner[i] ^= (i + sizeof...(cs)) % nextPrime(sizeof...(cs));
+-        }
+-    }
+-
+-    constexpr const char *c_str() const { return inner; }
+-
+-    constexpr std::size_t size() const { return sizeof...(cs); }
+-
+-    operator std::string_view() const { return {inner}; }
+-};
+-
+-template<char... is, std::size_t... I>
+-constexpr inline auto MakeInlineObfs(std::index_sequence<I...>) {
+-    return InlineObfs<(is ^ ((I + sizeof...(is)) % nextPrime(sizeof...(is))))...>();
+-}
+-
+-template<char... cs>
+-class StaticObfs {
+-public:
+-    CONSTEVAL StaticObfs() = default;
+-
+-    constexpr auto obtain() const {
+-        return MakeInlineObfs<cs...>(std::make_index_sequence<sizeof...(cs)>());
+-    }
+-};
+-
+-template<typename T, T... cs>
+-constexpr inline auto operator ""_iobfs() {
+-    return MakeInlineObfs<cs...>(std::make_index_sequence<sizeof...(cs)>());
+-}
+-
+-template<typename T, T... cs>
+-CONSTEVAL inline auto operator ""_sobfs() {
+-    return StaticObfs<cs...>{};
+-}
+-
+-template<char... as, char... bs>
+-CONSTEVAL inline auto operator+(const StaticObfs<as...> &, const StaticObfs<bs...> &) {
+-    return StaticObfs<as..., bs...>{};
+-}
+-
+-#pragma clang diagnostic pop
+diff --git a/TMessagesProj/jni/colorado/utils.cpp b/TMessagesProj/jni/colorado/utils.cpp
+deleted file mode 100644
+index 811b7d990..000000000
+--- a/TMessagesProj/jni/colorado/utils.cpp
++++ /dev/null
+@@ -1,37 +0,0 @@
+-#include <string>
+-#include <unistd.h>
+-
+-#include "logging.h"
+-
+-// Read exact same size as count
+-ssize_t xxread(int fd, void *buf, size_t count) {
+-    size_t read_sz = 0;
+-    ssize_t ret;
+-    do {
+-        ret = read(fd, (std::byte *) buf + read_sz, count - read_sz);
+-        if (ret < 0) {
+-            if (errno == EINTR)
+-                continue;
+-            LOGE("read");
+-            return ret;
+-        }
+-        read_sz += ret;
+-    } while (read_sz != count && ret != 0);
+-    if (read_sz != count) {
+-        LOGE("read (%zu != %zu)", count, read_sz);
+-    }
+-    return read_sz;
+-}
+-
+-bool ends_with(std::string_view str, std::string_view suffix) {
+-    return str.size() >= suffix.size() &&
+-           str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
+-}
+-
+-bool starts_with(std::string_view str, std::string_view prefix) {
+-    return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
+-}
+-
+-bool contains(std::string_view str, std::string_view substr) {
+-    return str.size() >= substr.size() && str.find(substr) != std::string::npos;
+-}
+\ No newline at end of file
+diff --git a/TMessagesProj/jni/colorado/utils.h b/TMessagesProj/jni/colorado/utils.h
+deleted file mode 100644
+index 9039fdff6..000000000
+--- a/TMessagesProj/jni/colorado/utils.h
++++ /dev/null
+@@ -1,11 +0,0 @@
+-#include <string>
+-
+-std::string read_certificate(int fd);
+-
+-ssize_t xxread(int fd, void *buf, size_t count);
+-
+-bool ends_with(std::string_view str, std::string_view suffix);
+-
+-bool starts_with(std::string_view str, std::string_view prefix);
+-
+-bool contains(std::string_view str, std::string_view substr);
+\ No newline at end of file
+diff --git a/TMessagesProj/jni/jni.c b/TMessagesProj/jni/jni.c
+index f9641fa90..06a1881c2 100644
+--- a/TMessagesProj/jni/jni.c
++++ b/TMessagesProj/jni/jni.c
+@@ -11,8 +11,6 @@
+ #include <sys/stat.h>
+ #include <time.h>
+ 
+-#include "colorado/colorado.h"
+-
+ int registerNativeTgNetFunctions(JavaVM *vm, JNIEnv *env);
+ int videoOnJNILoad(JavaVM *vm, JNIEnv *env);
+ int imageOnJNILoad(JavaVM *vm, JNIEnv *env);
+@@ -22,10 +20,6 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+ 	JNIEnv *env = 0;
+     srand(time(NULL));
+ 
+-    if (!check_signature()) {
+-        return JNI_ERR;
+-    }
+-
+ 	if ((*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_6) != JNI_OK) {
+ 		return -1;
+ 	}
+-- 
+2.53.0
+

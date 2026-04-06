@@ -1,0 +1,55 @@
+From 2772f989820e8a91bcda0d2bd69a66628b571a0d Mon Sep 17 00:00:00 2001
+From: LittleChest <hiya@littlew.top>
+Date: Fri, 3 Apr 2026 23:15:36 +0800
+Subject: Update app name to Open Nekogram
+
+---
+ TMessagesProj/src/main/res/values/strings_neko.xml | 4 ++--
+ TMessagesProj_App/build.gradle                     | 2 +-
+ settings.gradle                                    | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/TMessagesProj/src/main/res/values/strings_neko.xml b/TMessagesProj/src/main/res/values/strings_neko.xml
+index e6a542596..30913a4bd 100644
+--- a/TMessagesProj/src/main/res/values/strings_neko.xml
++++ b/TMessagesProj/src/main/res/values/strings_neko.xml
+@@ -1,8 +1,8 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+     <string name="AppNameNeko" translatable="false">@string/Nekogram</string>
+-    <string name="Nekogram" translatable="false">Nekogram</string>
+-    <string name="NekogramBeta" translatable="false">Nekogram Beta</string>
++    <string name="Nekogram" translatable="false">Open Nekogram</string>
++    <string name="NekogramBeta" translatable="false">Open Nekogram Beta</string>
+     <string name="NekoSettings">Neko Settings</string>
+     <string name="PreferIPv6">Prefer connecting through IPv6</string>
+     <string name="MessageMenu">Message menu</string>
+diff --git a/TMessagesProj_App/build.gradle b/TMessagesProj_App/build.gradle
+index 1d03e7e86..ed58f905f 100644
+--- a/TMessagesProj_App/build.gradle
++++ b/TMessagesProj_App/build.gradle
+@@ -103,7 +103,7 @@ androidComponents {
+             def abi = output.filters.find { it.filterType == FilterConfiguration.FilterType.ABI }?.identifier
+             def abiName = abi ?: "universal"
+             def baseVersionCode = output.versionCode.get()
+-            output.outputFileName.set("Nekogram-${output.versionName.get()}-${baseVersionCode}-${abiName}.apk")
++            output.outputFileName.set("OpenNeko-${output.versionName.get()}-${baseVersionCode}-${abiName}.apk")
+             output.versionCode.set(baseVersionCode * 10)
+         }
+     }
+diff --git a/settings.gradle b/settings.gradle
+index 8df4250b9..6469fcaaf 100644
+--- a/settings.gradle
++++ b/settings.gradle
+@@ -22,7 +22,7 @@ dependencyResolutionManagement {
+     }
+ }
+ 
+-rootProject.name = "Nekogram"
++rootProject.name = "Open Nekogram"
+ include ':TMessagesProj'
+ include ':TMessagesProj_App'
+ //include ':TMessagesProj_AppHuawei'
+-- 
+2.53.0
+

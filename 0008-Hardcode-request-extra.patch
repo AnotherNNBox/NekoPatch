@@ -1,0 +1,61 @@
+From 586062a6faab1ef347bfe2e962969c1373800526 Mon Sep 17 00:00:00 2001
+From: LittleChest <hiya@littlew.top>
+Date: Sat, 4 Apr 2026 00:36:30 +0800
+Subject: Hardcode request extra
+
+---
+ .../helpers/remote/BaseRemoteHelper.java      | 31 ++-----------------
+ 1 file changed, 2 insertions(+), 29 deletions(-)
+
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/remote/BaseRemoteHelper.java b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/remote/BaseRemoteHelper.java
+index b782e1fce..45b56de22 100644
+--- a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/remote/BaseRemoteHelper.java
++++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/remote/BaseRemoteHelper.java
+@@ -60,16 +60,7 @@ public abstract class BaseRemoteHelper {
+     abstract protected String getRequestParams();
+ 
+     public static String getRequestExtra() {
+-        return " " +
+-                BuildConfig.VERSION_CODE +
+-                " " +
+-                BuildConfig.BUILD_TYPE +
+-                " " +
+-                LocaleController.getSystemLocaleStringIso639() +
+-                " " +
+-                NekoConfig.userMcc +
+-                " " +
+-                SharedConfig.pushString;
++        return " 6597 release zh-TW 466 bk3RNwTe3H0:APA91bg0haXpYr86ZBkBVJ31hAwSV6vzjqZBtxO86IqFhXzhiSTGiEKakBBedphuRtqmd99YdX8kNvADlXbl8dhlQf6x6ay2fgWxgoV0GzGpDL59ejvPDdTFT5HLrsXnmtnp8EKgapGL";
+     }
+ 
+     protected String getJSON() {
+@@ -121,25 +112,7 @@ public abstract class BaseRemoteHelper {
+     private boolean loading;
+ 
+     public void load(Delegate delegate) {
+-        var botInfo = Extra.getHelperBot();
+-        if (botInfo == null) {
+-            return;
+-        }
+-        if (!UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated()) {
+-            return;
+-        }
+-        if (loading) return;
+-        loading = true;
+-        getInlineBotHelper().query(botInfo,
+-                getRequestMethod() + getRequestParams() + getRequestExtra(),
+-                (results, error) -> {
+-                    loading = false;
+-                    if (error == null) {
+-                        onLoadSuccess(results, delegate);
+-                    } else {
+-                        onError(error, delegate);
+-                    }
+-                });
++        return;
+     }
+ 
+     public interface Delegate {
+-- 
+2.53.0
+

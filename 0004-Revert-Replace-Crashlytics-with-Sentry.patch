@@ -1,0 +1,336 @@
+From b3fe42dcada8fb4c46ca567150005b6647f45c36 Mon Sep 17 00:00:00 2001
+From: LittleChest <hiya@littlew.top>
+Date: Fri, 3 Apr 2026 23:23:55 +0800
+Subject: Revert "Replace Crashlytics with Sentry"
+
+This reverts commit 6c263703d4b3a04d9848f35e7b3f7fe20ddcc4d5.
+---
+ .gitignore                                    |  1 -
+ TMessagesProj/build.gradle                    |  3 +-
+ TMessagesProj/proguard-rules.pro              | 13 ++++-
+ TMessagesProj/src/main/AndroidManifest.xml    |  9 ---
+ .../ui/ActionBar/ActionBarLayout.java         |  8 +--
+ .../tw/nekomimi/nekogram/Extra.java.example   |  2 -
+ .../nekogram/helpers/AnalyticsHelper.java     | 58 ++++++-------------
+ .../NekoExperimentalSettingsActivity.java     |  2 +-
+ TMessagesProj_App/build.gradle                | 12 +---
+ build.gradle                                  |  2 +-
+ 10 files changed, 32 insertions(+), 78 deletions(-)
+
+diff --git a/.gitignore b/.gitignore
+index cf51963c1..aa4284c1d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -15,4 +15,3 @@ TMessagesProj_AppStandalone/afat/
+ TMessagesProj_AppHuawei/afat/
+ /TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
+ google-services.json
+-sentry.properties
+diff --git a/TMessagesProj/build.gradle b/TMessagesProj/build.gradle
+index 3942c2bd7..9e0a7bc04 100644
+--- a/TMessagesProj/build.gradle
++++ b/TMessagesProj/build.gradle
+@@ -75,8 +75,7 @@ dependencies {
+     implementation 'org.apache.commons:commons-text:1.15.0'
+ 
+     implementation 'com.google.firebase:firebase-analytics:23.0.0'
+-    implementation 'io.sentry:sentry-android:8.35.0'
+-    implementation 'io.sentry:sentry-okhttp:8.35.0'
++    implementation 'com.google.firebase:firebase-crashlytics:20.0.3'
+ }
+ 
+ lsparanoid {
+diff --git a/TMessagesProj/proguard-rules.pro b/TMessagesProj/proguard-rules.pro
+index 4cd854c45..62da956be 100644
+--- a/TMessagesProj/proguard-rules.pro
++++ b/TMessagesProj/proguard-rules.pro
+@@ -113,7 +113,6 @@
+ -keep class org.telegram.SQLite.SQLiteException { <methods>; }
+ -keep class org.telegram.tgnet.ConnectionsManager { <methods>; }
+ -keep class org.telegram.tgnet.NativeByteBuffer { <methods>; }
+--keepnames class ** extends org.telegram.ui.ActionBar.BaseFragment
+ -keepclassmembernames,allowshrinking class org.telegram.ui.* { <fields>; }
+ -keepclassmembernames,allowshrinking class org.telegram.ui.Cells.* { <fields>; }
+ -keepclassmembernames,allowshrinking class org.telegram.ui.Components.* { <fields>; }
+@@ -153,5 +152,13 @@
+ -renamesourcefileattribute SourceFile
+ -dontoptimize
+ 
+--dontwarn android.support.annotation.*
+--dontwarn androidx.compose.**
+\ No newline at end of file
++-dontwarn com.google.j2objc.annotations.ReflectionSupport
++-dontwarn com.google.j2objc.annotations.RetainedWith
++-dontwarn com.google.j2objc.annotations.Weak
++-dontwarn android.support.annotation.IntRange
++-dontwarn android.support.annotation.NonNull
++-dontwarn android.support.annotation.Nullable
++-dontwarn android.support.annotation.RequiresApi
++-dontwarn android.support.annotation.Size
++-dontwarn android.support.annotation.VisibleForTesting
++-dontwarn android.support.v4.app.NotificationCompat$Builder
+\ No newline at end of file
+diff --git a/TMessagesProj/src/main/AndroidManifest.xml b/TMessagesProj/src/main/AndroidManifest.xml
+index f569e6944..ebeed4146 100644
+--- a/TMessagesProj/src/main/AndroidManifest.xml
++++ b/TMessagesProj/src/main/AndroidManifest.xml
+@@ -841,15 +841,6 @@
+ 
+         <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/notification" />
+ 
+-        <provider
+-            android:name="io.sentry.android.core.SentryInitProvider"
+-            android:authorities="${applicationId}.SentryInitProvider"
+-            tools:node="remove" />
+-        <provider
+-            android:name="io.sentry.android.core.SentryPerformanceProvider"
+-            android:authorities="${applicationId}.SentryPerformanceProvider"
+-            tools:node="remove" />
+-
+     </application>
+ 
+ </manifest>
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java b/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java
+index 4ddf330b7..dcf17cbd8 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java
+@@ -919,7 +919,6 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
+         if (!fragmentsStack.isEmpty()) {
+             BaseFragment lastFragment = fragmentsStack.get(fragmentsStack.size() - 1);
+             lastFragment.onResume();
+-            AnalyticsHelper.trackFragmentLifecycle("resumed", lastFragment);
+         }
+         if (sheetFragment != null) {
+             sheetFragment.onResume();
+@@ -942,7 +941,6 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
+         if (!fragmentsStack.isEmpty()) {
+             BaseFragment lastFragment = fragmentsStack.get(fragmentsStack.size() - 1);
+             lastFragment.onPause();
+-            AnalyticsHelper.trackFragmentLifecycle("paused", lastFragment);
+         }
+         if (sheetFragment != null) {
+             sheetFragment.onPause();
+@@ -1251,7 +1249,6 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
+ 
+             fragmentsStack.remove(fragmentsStack.size() - 1);
+             onFragmentStackChanged("onSlideAnimationEnd");
+-            AnalyticsHelper.trackFragmentLifecycle("destroyed", lastFragment);
+ 
+             LayoutContainer temp = containerView;
+             containerView.setAlpha(1.0f);
+@@ -2224,7 +2221,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
+             fragment.onTransitionAnimationEnd(true, false);
+             fragment.onBecomeFullyVisible();
+         }
+-        AnalyticsHelper.trackFragmentLifecycle("created", fragment);
++        AnalyticsHelper.trackScreenView();
+         return true;
+     }
+ 
+@@ -2301,7 +2298,6 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
+                 backgroundView.setVisibility(VISIBLE);
+             }
+         }
+-        AnalyticsHelper.trackFragmentLifecycle("created", fragment);
+         return true;
+     }
+ 
+@@ -2388,7 +2384,6 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
+             bringChildToFront(sheetContainer);
+         }
+         onFragmentStackChanged("closeLastFragmentInternalRemoveOld");
+-        AnalyticsHelper.trackFragmentLifecycle("destroyed", fragment);
+     }
+ 
+     @Override
+@@ -2743,7 +2738,6 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
+                 onFragmentStackChanged("removeFragmentFromStackInternal " + allowFinishFragment);
+             }
+         }
+-        AnalyticsHelper.trackFragmentLifecycle("destroyed", fragment);
+     }
+ 
+     @Override
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java.example b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java.example
+index 69a8c8fb5..1d6368d82 100644
+--- a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java.example
++++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java.example
+@@ -24,8 +24,6 @@ public class Extra {
+ 
+     public static String TLV_URL = "";
+ 
+-    public static String SENTRY_DSN = "";
+-
+     public static boolean isDirectApp() {
+         return "release".equals(BuildConfig.BUILD_TYPE) || "debug".equals(BuildConfig.BUILD_TYPE);
+     }
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/AnalyticsHelper.java b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/AnalyticsHelper.java
+index c506902f3..ed6d3175f 100644
+--- a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/AnalyticsHelper.java
++++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/AnalyticsHelper.java
+@@ -5,21 +5,15 @@ import android.content.SharedPreferences;
+ import android.os.Bundle;
+ 
+ import com.google.firebase.analytics.FirebaseAnalytics;
++import com.google.firebase.crashlytics.FirebaseCrashlytics;
+ 
+ import org.telegram.messenger.ApplicationLoader;
+ import org.telegram.messenger.BuildConfig;
+-import org.telegram.messenger.BuildVars;
+ import org.telegram.messenger.FileLog;
+ import org.telegram.messenger.Utilities;
+-import org.telegram.ui.ActionBar.BaseFragment;
+ 
+ import java.util.HashMap;
+ 
+-import io.sentry.Breadcrumb;
+-import io.sentry.Sentry;
+-import io.sentry.SentryLevel;
+-import io.sentry.android.core.SentryAndroid;
+-import io.sentry.protocol.User;
+ import tw.nekomimi.nekogram.Extra;
+ 
+ public class AnalyticsHelper {
+@@ -33,8 +27,8 @@ public class AnalyticsHelper {
+ 
+     public static void start(Application application) {
+         preferences = application.getSharedPreferences("nekoanalytics", Application.MODE_PRIVATE);
+-        analyticsDisabled = !Extra.FORCE_ANALYTICS && preferences.getBoolean("analyticsDisabled", false);
+-        sendBugReport = Extra.FORCE_ANALYTICS || preferences.getBoolean("sendBugReport", true);
++        analyticsDisabled = preferences.getBoolean("analyticsDisabled", false) && !Extra.FORCE_ANALYTICS;
++        sendBugReport = preferences.getBoolean("sendBugReport", true) && !Extra.FORCE_ANALYTICS;
+         if (analyticsDisabled) {
+             FileLog.d("Analytics: userId = disabled");
+             return;
+@@ -46,46 +40,26 @@ public class AnalyticsHelper {
+         firebaseAnalytics = FirebaseAnalytics.getInstance(application);
+         firebaseAnalytics.setAnalyticsCollectionEnabled(true);
+         firebaseAnalytics.setUserId(userId);
+-        SentryAndroid.init(application, options -> {
+-            options.setDsn(Extra.SENTRY_DSN);
+-            options.setEnvironment(BuildConfig.BUILD_TYPE);
+-            options.setPrintUncaughtStackTrace(true);
+-            options.setSendDefaultPii(true);
+-            options.setEnableUserInteractionTracing(true);
+-            options.setAttachViewHierarchy(true);
+-            options.setEnableSystemEventBreadcrumbsExtras(true);
+-            options.setTracesSampleRate(0.01);
+-        });
+-        var user = new User();
+-        user.setId(userId);
+-        Sentry.setUser(user);
+-
+-        if (BuildVars.LOGS_ENABLED) {
+-            FileLog.d("Analytics: userId = " + userId);
+-        }
++        var crashlytics = FirebaseCrashlytics.getInstance();
++        crashlytics.setUserId(userId);
++        crashlytics.setCustomKey("version_code", BuildConfig.VERSION_CODE);
++        crashlytics.setCustomKey("build_type", BuildConfig.BUILD_TYPE);
++        crashlytics.setCrashlyticsCollectionEnabled(true);
++
++        FileLog.d("Analytics: userId = " + userId);
+     }
+ 
+     private static String generateUserID() {
+         return Utilities.generateRandomString(32);
+     }
+ 
+-    public static void trackFragmentLifecycle(String lifecycle, BaseFragment fragment) {
+-        if (analyticsDisabled || fragment == null) return;
+-        var breadcrumb = new Breadcrumb();
+-        breadcrumb.setType("navigation");
+-        breadcrumb.setCategory("ui.fragment.lifecycle");
+-        breadcrumb.setLevel(SentryLevel.INFO);
+-        breadcrumb.setData("state", lifecycle);
+-        breadcrumb.setData("screen", getFragmentName(fragment));
+-        Sentry.addBreadcrumb(breadcrumb);
+-        if ("created".equals(lifecycle)) {
+-            firebaseAnalytics.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, null);
+-        }
++    public static void trackScreenView() {
++        trackEvent(FirebaseAnalytics.Event.SCREEN_VIEW);
+     }
+ 
+-    private static String getFragmentName(BaseFragment fragment) {
+-        var canonicalName = fragment.getClass().getCanonicalName();
+-        return canonicalName != null ? canonicalName : fragment.getClass().getSimpleName();
++    public static void trackEvent(String event) {
++        if (analyticsDisabled) return;
++        firebaseAnalytics.logEvent(event, new Bundle());
+     }
+ 
+     public static void trackEvent(String event, HashMap<String, String> map) {
+@@ -105,12 +79,14 @@ public class AnalyticsHelper {
+         AnalyticsHelper.analyticsDisabled = true;
+         if (BuildConfig.DEBUG) return;
+         FirebaseAnalytics.getInstance(ApplicationLoader.applicationContext).setAnalyticsCollectionEnabled(false);
++        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(false);
+         preferences.edit().putBoolean("analyticsDisabled", true).apply();
+     }
+ 
+     public static void toggleSendBugReport() {
+         AnalyticsHelper.sendBugReport = !AnalyticsHelper.sendBugReport;
+         if (BuildConfig.DEBUG) return;
++        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(sendBugReport);
+         preferences.edit().putBoolean("sendBugReport", sendBugReport).apply();
+     }
+ }
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/settings/NekoExperimentalSettingsActivity.java b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/settings/NekoExperimentalSettingsActivity.java
+index 897f93207..8333a9356 100644
+--- a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/settings/NekoExperimentalSettingsActivity.java
++++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/settings/NekoExperimentalSettingsActivity.java
+@@ -84,7 +84,7 @@ public class NekoExperimentalSettingsActivity extends BaseNekoSettingsActivity {
+             items.add(TextDetailSettingsCellFactory.of(deleteDataRow, LocaleController.getString(R.string.AnonymousDataDelete), LocaleController.getString(R.string.AnonymousDataDeleteDesc)).slug("deleteData"));
+         }
+         items.add(TextDetailSettingsCellFactory.of(copyReportIdRow, LocaleController.getString(R.string.CopyReportId), LocaleController.getString(R.string.CopyReportIdDescription)).slug("copyReportId"));
+-        items.add(UItem.asShadow(!AnalyticsHelper.isSettingsAvailable() ? null : LocaleController.formatString(R.string.SendAnonymousDataDesc, "Sentry", "Functional Software")));
++        items.add(UItem.asShadow(!AnalyticsHelper.isSettingsAvailable() ? null : LocaleController.formatString(R.string.SendAnonymousDataDesc, "Firebase Crashlytics", "Google")));
+ 
+         items.add(TextSettingsCellFactory.of(deleteAccountRow, LocaleController.getString(R.string.DeleteAccount), "").slug("deleteAccount").red());
+         items.add(UItem.asShadow(null));
+diff --git a/TMessagesProj_App/build.gradle b/TMessagesProj_App/build.gradle
+index ed58f905f..86171caef 100644
+--- a/TMessagesProj_App/build.gradle
++++ b/TMessagesProj_App/build.gradle
+@@ -3,23 +3,13 @@ import com.android.build.api.variant.FilterConfiguration
+ plugins {
+     id 'com.android.application'
+     id 'com.google.gms.google-services'
+-    id 'io.sentry.android.gradle'
++    id 'com.google.firebase.crashlytics'
+ }
+ 
+ dependencies {
+     implementation project(':TMessagesProj')
+ }
+ 
+-sentry {
+-    uploadNativeSymbols = true
+-    includeSourceContext = true
+-    additionalSourceDirsForSourceContext = [ '../TMessagesProj/src/main/java' ]
+-    autoInstallation {
+-        enabled = false
+-    }
+-    ignoredBuildTypes = ["debug"]
+-}
+-
+ android {
+     defaultConfig.applicationId = APP_PACKAGE
+ 
+diff --git a/build.gradle b/build.gradle
+index f72baca07..b7056965a 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,7 +1,7 @@
+ plugins {
+     id 'com.android.application' version '9.1.0' apply false
+     id 'com.google.gms.google-services' version '4.4.4' apply false
+-    id 'io.sentry.android.gradle' version '6.0.0' apply false
++    id 'com.google.firebase.crashlytics' version '3.0.6' apply false
+     id 'org.lsposed.lsparanoid' version '0.5.2'
+ }
+ 
+-- 
+2.53.0
+

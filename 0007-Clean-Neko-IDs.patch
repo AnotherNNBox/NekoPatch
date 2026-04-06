@@ -1,0 +1,44 @@
+From cdde9fd310ce20aad610415ee3a04039dfe66ea5 Mon Sep 17 00:00:00 2001
+From: LittleChest <hiya@littlew.top>
+Date: Sat, 4 Apr 2026 00:36:10 +0800
+Subject: Clean Neko IDs
+
+---
+ .../tw/nekomimi/nekogram/helpers/remote/ConfigHelper.java  | 7 +------
+ .../tw/nekomimi/nekogram/settings/NekoDonateActivity.java  | 2 +-
+ 2 files changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/remote/ConfigHelper.java b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/remote/ConfigHelper.java
+index 66d74a343..1a2b11325 100644
+--- a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/remote/ConfigHelper.java
++++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/remote/ConfigHelper.java
+@@ -18,12 +18,7 @@ import tw.nekomimi.nekogram.NekoConfig;
+ public class ConfigHelper extends BaseRemoteHelper {
+     private static final String NEWS_METHOD = "get_config";
+ 
+-    private static final List<Long> DEFAULT_VERIFY_LIST = Arrays.asList(
+-            1349472891L,
+-            1339737452L,
+-            1302242053L,
+-            1715773134L
+-    );
++    private static final List<Long> DEFAULT_VERIFY_LIST = Arrays.asList();
+ 
+     private static final int TYPE_NEWS = 0;
+     private static final int TYPE_PROXY = 1;
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/settings/NekoDonateActivity.java b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/settings/NekoDonateActivity.java
+index 4f12cbc72..0f3d4fbd0 100644
+--- a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/settings/NekoDonateActivity.java
++++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/settings/NekoDonateActivity.java
+@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
+ import tw.nekomimi.nekogram.helpers.remote.ConfigHelper;
+ 
+ public class NekoDonateActivity extends BaseNekoSettingsActivity implements PurchasesUpdatedListener {
+-    private static final List<String> SKUS = Arrays.asList("donate001", "donate002", "donate005", "donate010", "donate020", "donate050", "donate100");
++    private static final List<String> SKUS = Arrays.asList();
+     private final List<ConfigHelper.Crypto> cryptos = ConfigHelper.getCryptos();
+ 
+     private final int donateRow = 100;
+-- 
+2.53.0
+

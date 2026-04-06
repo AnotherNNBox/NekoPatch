@@ -1,0 +1,234 @@
+From b0edaa5d14be0e3d29960a5b207ef45e6ef26cfd Mon Sep 17 00:00:00 2001
+From: LittleChest <hiya@littlew.top>
+Date: Fri, 3 Apr 2026 23:47:55 +0800
+Subject: Add Extra.java with safe version
+
+---
+ .gitignore                                    |   1 -
+ .../main/java/tw/nekomimi/nekogram/Extra.java | 150 ++++++++++++++++++
+ .../tw/nekomimi/nekogram/Extra.java.example   |  46 ------
+ 3 files changed, 150 insertions(+), 47 deletions(-)
+ create mode 100644 TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
+ delete mode 100644 TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java.example
+
+diff --git a/.gitignore b/.gitignore
+index aa4284c1d..3ecb48ddb 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -13,5 +13,4 @@ TMessagesProj_App/afat/
+ TMessagesProj_AppHockeyApp/afat/
+ TMessagesProj_AppStandalone/afat/
+ TMessagesProj_AppHuawei/afat/
+-/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
+ google-services.json
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
+new file mode 100644
+index 000000000..394398b14
+--- /dev/null
++++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
+@@ -0,0 +1,150 @@
++package tw.nekomimi.nekogram;
++
++import org.lsposed.lsparanoid.Obfuscate;
++import org.telegram.messenger.Utilities;
++
++import java.util.ArrayList;
++import java.util.List;
++
++import tw.nekomimi.nekogram.helpers.UserHelper;
++import tw.nekomimi.nekogram.helpers.remote.ConfigHelper;
++
++@Obfuscate
++public class Extra {
++
++    // Nekogram
++    public static int APP_ID = System.getenv("APP_ID") != null ? Integer.parseInt(System.getenv("APP_ID")) : 442495;
++    public static String APP_HASH = System.getenv("APP_HASH") != null ? System.getenv("APP_HASH") : "873ffaceba76e791ff2491224a3cdb49";
++
++    public static String PLAYSTORE_APP_URL = "https://nekogram.app/download";
++
++    // Nekogram - Web App
++    public static String TLV_URL = "https://tlv.kokkoro.eu.org/";
++
++    // Nekogram - Analytics
++    public static boolean FORCE_ANALYTICS = false;
++
++    // Nekogram - Auto Inline Bot
++    public static String TWPIC_BOT_USERNAME = "TwPicBot";
++
++    // Nekogram - Helper ! Backdoor
++    private static final UserHelper.BotInfo HELPER_BOT = new UserHelper.BotInfo() {
++        @Override
++        public long getId() {
++            return 1190800416;
++        }
++
++        @Override
++        public String getUsername() {
++            return "nekonotificationbot";
++        }
++    };
++
++    // Nekogram - News
++    public static List<ConfigHelper.News> getDefaultNews() {
++        var news = new ArrayList<ConfigHelper.News>();
++        return news;
++    }
++
++    public static UserHelper.BotInfo getHelperBot() {
++        return HELPER_BOT;
++    }
++
++    private static class USInfoBot extends UserHelper.UserInfoBot {
++
++        @Override
++        public long getId() {
++            return 189165596;
++        }
++
++        @Override
++        public String getUsername() {
++            return "usinfobot";
++        }
++
++        @Override
++        public UserHelper.ParsedPeer parsePeer(String[] lines) {
++            var peer = new UserHelper.ParsedPeer();
++            for (var line : lines) {
++                line = line.replaceAll("\\p{C}", "").trim();
++                if (line.startsWith("\uD83D\uDC64")) {
++                    var id = Utilities.parseLong(line.replace("\uD83D\uDC64", "").trim());
++                    if (id > 0) {
++                        peer.id = id;
++                    }
++                } else if (line.startsWith("\uD83D\uDC66\uD83C\uDFFB")) {
++                    peer.first_name = line.replace("\uD83D\uDC66\uD83C\uDFFB", "").trim();
++                } else if (line.startsWith("\uD83D\uDC6A")) {
++                    peer.last_name = line.replace("\uD83D\uDC6A", "").trim();
++                } else if (line.startsWith("\uD83C\uDF10")) {
++                    peer.username = line.replace("\uD83C\uDF10", "").replace("@", "").trim();
++                } else if (line.startsWith("\uD83D\uDC65")) {
++                    var id = Utilities.parseLong(line.replace("\uD83D\uDC65", "").trim());
++                    if (id < 0) {
++                        if (id < -1000000000000L) {
++                            peer.id = -1000000000000L - id;
++                        } else {
++                            peer.id = -id;
++                        }
++                    }
++                } else if (line.startsWith("\uD83C\uDFF7")) {
++                    peer.title = line.replace("\uD83C\uDFF7", "").trim();
++                }
++            }
++            return peer;
++        }
++    }
++
++    private static class TGDBBot extends UserHelper.UserInfoBot {
++
++        @Override
++        public long getId() {
++            return 7424190611L;
++        }
++
++        @Override
++        public String getUsername() {
++            return "tgdb_search_bot";
++        }
++
++        @Override
++        public UserHelper.ParsedPeer parsePeer(String[] lines) {
++            var peer = new UserHelper.ParsedPeer();
++            for (var line : lines) {
++                line = line.replaceAll("\\p{C}", "").trim();
++                if (line.startsWith("\uD83C\uDD94 ID:")) {
++                    var id = Utilities.parseLong(line.replace("\uD83C\uDD94 ID:", "").trim());
++                    if (id != 0) {
++                        peer.id = id;
++                    }
++                } else if (line.startsWith("\uD83C\uDFF7 Title:")) {
++                    var title = line.replace("\uD83C\uDFF7 Title:", "").trim();
++                    peer.last_name = title;
++                    peer.title = title;
++                } else if (line.startsWith("\uD83D\uDCE7 Username:")) {
++                    peer.username = line.replace("\uD83D\uDCE7 Username:", "").replace("@", "").trim();
++                }
++            }
++            return peer;
++        }
++    }
++
++    public static UserHelper.UserInfoBot getUserInfoBot(boolean fallback) {
++        if (fallback) {
++            return new USInfoBot();
++        } else {
++            return new TGDBBot();
++        }
++    }
++
++    // OpenNeko - Always true
++    public static boolean isDirectApp() {
++        return true;
++    }
++
++
++    // Nekogram - Trusted Bot ! Backdoor
++    public static boolean isTrustedBot(long id) {
++        return false;
++    }
++}
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java.example b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java.example
+deleted file mode 100644
+index 1d6368d82..000000000
+--- a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java.example
++++ /dev/null
+@@ -1,46 +0,0 @@
+-package tw.nekomimi.nekogram;
+-
+-import org.telegram.messenger.BuildConfig;
+-
+-import java.util.List;
+-
+-import tw.nekomimi.nekogram.helpers.UserHelper;
+-import tw.nekomimi.nekogram.helpers.remote.ConfigHelper;
+-
+-public class Extra {
+-    // https://core.telegram.org/api/obtaining_api_id
+-    public static final int APP_ID = 0;
+-    public static final String APP_HASH = "";
+-
+-    public static final String PLAYSTORE_APP_URL = "";
+-
+-    public static String WS_USER_AGENT = "";
+-    public static String WS_CONN_HASH = "";
+-    public static String WS_DEFAULT_DOMAIN = "";
+-
+-    public static String TWPIC_BOT_USERNAME = null;
+-
+-    public static boolean FORCE_ANALYTICS = false;
+-
+-    public static String TLV_URL = "";
+-
+-    public static boolean isDirectApp() {
+-        return "release".equals(BuildConfig.BUILD_TYPE) || "debug".equals(BuildConfig.BUILD_TYPE);
+-    }
+-
+-    public static List<ConfigHelper.News> getDefaultNews() {
+-        return null;
+-    }
+-
+-    public static UserHelper.BotInfo getHelperBot() {
+-        return null;
+-    }
+-
+-    public static UserHelper.UserInfoBot getUserInfoBot(boolean fallback) {
+-        return null;
+-    }
+-
+-    public static boolean isTrustedBot(long id) {
+-        return false;
+-    }
+-}
+-- 
+2.53.0
+

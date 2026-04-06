@@ -1,0 +1,54 @@
+From 6a7e26ac341794223b596456e67c081304f586d8 Mon Sep 17 00:00:00 2001
+From: LittleChest <hiya@littlew.top>
+Date: Sat, 4 Apr 2026 00:07:44 +0800
+Subject: Do not set reg date
+
+---
+ .../org/telegram/ui/Cells/UserInfoCell.java   |  2 --
+ .../nekogram/helpers/RegDateHelper.java       | 19 -------------------
+ 2 files changed, 21 deletions(-)
+
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Cells/UserInfoCell.java b/TMessagesProj/src/main/java/org/telegram/ui/Cells/UserInfoCell.java
+index 2e1fdd7f1..81ae0e272 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Cells/UserInfoCell.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Cells/UserInfoCell.java
+@@ -236,8 +236,6 @@ public class UserInfoCell extends View implements NotificationCenter.Notificatio
+         width = Math.max(width, rowsWidth);
+ 
+         width = Math.min(width + dp(32), maxWidth);
+-
+-        RegDateHelper.setRegDate(dialogId, settings);
+     }
+ 
+     @Override
+diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/RegDateHelper.java b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/RegDateHelper.java
+index 4c8e5c2aa..21347decf 100644
+--- a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/RegDateHelper.java
++++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/helpers/RegDateHelper.java
+@@ -47,23 +47,4 @@ public class RegDateHelper {
+             callback.accept(date, null);
+         });
+     }
+-
+-    public static void setRegDate(long dialogId, TLRPC.PeerSettings settings) {
+-        if (settings == null || settings.registration_month == null) {
+-            return;
+-        }
+-        InlineBotHelper.getInstance(UserConfig.selectedAccount).query(Extra.getHelperBot(), String.format("set_regdate %s %s %s %s", dialogId, settings.registration_month, settings.phone_country, BaseRemoteHelper.getRequestExtra()), (results, error) -> {
+-            if (error != null) {
+-                FileLog.e("Failed to set reg date: " + error);
+-            }
+-        });
+-        var parts = settings.registration_month.split("\\.");
+-        if (parts.length != 2) return;
+-        var month = Integer.parseInt(parts[0]);
+-        var year = Integer.parseInt(parts[1]);
+-        var calendar = Calendar.getInstance();
+-        calendar.set(year, month - 1, 2, 0, 0, 0);
+-        calendar.set(Calendar.MILLISECOND, 0);
+-        regDates.put(dialogId, (int) (calendar.getTimeInMillis() / 1000L));
+-    }
+ }
+-- 
+2.53.0
+
