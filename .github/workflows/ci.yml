@@ -1,0 +1,100 @@
+name: Upstream
+
+on:
+  push: 
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Nekogram
+      uses: actions/checkout@v6
+      with: 
+        repository: 'Nekogram/Nekogram'
+
+    - name: Checkout NekoPatch
+      uses: actions/checkout@v6
+      with:
+        path: 'patches'
+
+    - name: Apply Patches
+      run: |
+        git config --global user.email "${{ secrets.GIT_EMAIL }}"
+        git config --global user.name "${{ secrets.GIT_NAME }}"
+        for patch in $(ls -1 patches/*.patch | sort -V)
+        do
+          echo "Applying patch: $patch"
+          if ! git am --ignore-space-change --ignore-whitespace "$patch" > /dev/null 2>&1
+          then
+            echo "::warning title=Can not apply patch::Will retry $patch with 3way."
+            git am --abort
+            if ! git am --3way --ignore-space-change --ignore-whitespace "$patch"
+            then
+              echo "::error title=Failed to apply patch::Please refresh $patch, aborting..."
+              exit 1
+            fi
+          fi
+        done
+        rm -rf patches
+
+    - name: Set up JDK
+      uses: actions/setup-java@v5
+      with:
+        java-version: '21'
+        distribution: 'zulu'
+        cache: gradle
+
+    - name: Set up NDK
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: r27d
+
+    - name: Install secret
+      run: |
+        echo "${{ secrets.KEY_STORE }}" | base64 --decode > /tmp/keystore.jks
+        echo "storeFile=/tmp/keystore.jks" >> local.properties
+        echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> local.properties
+        echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> local.properties
+        echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> local.properties
+        echo "${{ secrets.GOOGLE_SERVICE }}" | base64 --decode > TMessagesProj_App/google-services.json
+
+    - name: Build
+      run: |
+        chmod +x gradlew
+        ./gradlew :TMessagesProj_App:assembleRelease
+      env:
+        GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx8g"
+        APP_ID: ${{ secrets.APP_ID }}
+        APP_HASH: ${{ secrets.APP_HASH }}
+
+    - name: Upload armeabi-v7a apk
+      uses: actions/upload-artifact@v7
+      with:
+        name: armeabi-v7a
+        path: TMessagesProj_App/build/outputs/apk/release/OpenNeko-*-armeabi-v7a.apk
+
+    - name: Upload arm64-v8a apk
+      uses: actions/upload-artifact@v7
+      with:
+        name: arm64-v8a
+        path: TMessagesProj_App/build/outputs/apk/release/OpenNeko-*-arm64-v8a.apk
+
+    - name: Upload x86 apk
+      uses: actions/upload-artifact@v7
+      with:
+        name: x86
+        path: TMessagesProj_App/build/outputs/apk/release/OpenNeko-*-x86.apk
+
+    - name: Upload x86_64 apk
+      uses: actions/upload-artifact@v7
+      with:
+        name: x86_64
+        path: TMessagesProj_App/build/outputs/apk/release/OpenNeko-*-x86_64.apk
+
+    - name: Upload universal apk
+      uses: actions/upload-artifact@v7
+      with:
+        name: universal
+        path: TMessagesProj_App/build/outputs/apk/release/OpenNeko-*-universal.apk
