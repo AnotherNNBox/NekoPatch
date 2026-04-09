@@ -11,32 +11,12 @@ jobs:
     - name: Checkout Nekogram
       uses: actions/checkout@v6
       with: 
-        repository: 'Nekogram/Nekogram'
-
-    - name: Checkout NekoPatch
-      uses: actions/checkout@v6
-      with:
-        path: 'patches'
+        repository: 'OpenNekogram/OpenNeko'
 
     - name: Apply Patches
       run: |
         git config --global user.email "${{ secrets.GIT_EMAIL }}"
         git config --global user.name "${{ secrets.GIT_NAME }}"
-        for patch in $(ls -1 patches/*.patch | sort -V)
-        do
-          echo "Applying patch: $patch"
-          if ! git am --ignore-space-change --ignore-whitespace "$patch" > /dev/null 2>&1
-          then
-            echo "::warning title=Can not apply patch::Will retry $patch with 3way."
-            git am --abort
-            if ! git am --3way --ignore-space-change --ignore-whitespace "$patch"
-            then
-              echo "::error title=Failed to apply patch::Please refresh $patch, aborting..."
-              exit 1
-            fi
-          fi
-        done
-        rm -rf patches
 
     - name: Set up JDK
       uses: actions/setup-java@v5
