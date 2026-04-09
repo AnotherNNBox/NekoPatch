@@ -1,0 +1,3627 @@
+From f6dd434f023f6531cb3ba60e3a47e9d142a75f97 Mon Sep 17 00:00:00 2001
+From: Arseny271 <arsendmitr@gmail.com>
+Date: Sun, 5 Apr 2026 13:17:21 +0200
+Subject: update to 12.5.2 (6597)
+
+---
+ .../telegram/messenger/AndroidUtilities.java  |  14 +
+ .../telegram/messenger/BotForumHelper.java    |   5 +
+ .../ui/ActionBar/ActionBarLayout.java         |  15 +-
+ .../ui/ActionBar/FloatingToolbar.java         |  48 +--
+ .../java/org/telegram/ui/AvatarPreviewer.java | 106 +++++--
+ .../java/org/telegram/ui/ChatActivity.java    | 291 ++++++++++--------
+ .../telegram/ui/ChatRightsEditActivity.java   |   9 +-
+ .../ui/Components/BlurBehindDrawable.java     |   4 +-
+ .../ui/Components/ChatActivityEnterView.java  |  11 +
+ .../ui/Components/EditTextBoldCursor.java     |   9 +-
+ .../telegram/ui/Components/ItemOptions.java   |  65 +++-
+ .../ui/Components/MessagePreviewView.java     |  85 +++--
+ .../ui/Components/ProfileActionsView.java     | 119 +++++++
+ .../ui/Components/ProfileMusicView.java       |   2 +
+ .../ui/Components/ReactedUsersListView.java   |   2 +-
+ .../telegram/ui/Components/ScrimOptions.java  | 123 +++++---
+ .../ui/Components/StarRatingView.java         |   3 +
+ .../ui/Components/TopicsTabsView.java         | 110 ++++++-
+ .../BlurredBackgroundDrawableViewFactory.java |  19 +-
+ .../drawable/BlurredBackgroundDrawable.java   |  21 +-
+ .../impl/BlurredBackgroundProviderImpl.java   |  21 ++
+ .../ui/Components/blur3/utils/Blur3Utils.java |  24 ++
+ .../chat/ChatListViewPaddingsAnimator.java    |   3 +-
+ .../Components/chat/ViewPositionWatcher.java  |  26 +-
+ .../inset/WindowAnimatedInsetsProvider.java   |   2 +-
+ .../org/telegram/ui/ContentPreviewViewer.java |  67 +++-
+ .../java/org/telegram/ui/DialogsActivity.java |  13 +-
+ .../telegram/ui/GradientHeaderActivity.java   |  22 +-
+ .../java/org/telegram/ui/LaunchActivity.java  |   6 -
+ .../org/telegram/ui/MainTabsActivity.java     |  32 +-
+ .../org/telegram/ui/MessageSendPreview.java   |  85 ++---
+ .../java/org/telegram/ui/PhotoViewer.java     |  11 +
+ .../telegram/ui/PremiumPreviewFragment.java   |   8 +
+ .../java/org/telegram/ui/ProfileActivity.java |   1 +
+ .../telegram/ui/Stars/StarsIntroActivity.java |  18 +-
+ .../Stories/recorder/CollageLayoutView2.java  |   2 +-
+ .../org/telegram/ui/TON/TONIntroActivity.java |   5 +-
+ .../java/org/telegram/ui/TodoItemMenu.java    | 126 ++++----
+ .../org/telegram/ui/ViewPagerActivity.java    |   6 +-
+ .../main/res/drawable/menu_sidebar_bottom.xml |   5 +
+ ...menu_sidebar.xml => menu_sidebar_left.xml} |   0
+ .../main/res/drawable/menu_sidebar_top.xml    |   5 +
+ TMessagesProj/src/main/res/values/strings.xml |   2 +
+ gradle.properties                             |   4 +-
+ 44 files changed, 1097 insertions(+), 458 deletions(-)
+ create mode 100644 TMessagesProj/src/main/res/drawable/menu_sidebar_bottom.xml
+ rename TMessagesProj/src/main/res/drawable/{menu_sidebar.xml => menu_sidebar_left.xml} (100%)
+ create mode 100644 TMessagesProj/src/main/res/drawable/menu_sidebar_top.xml
+
+diff --git a/TMessagesProj/src/main/java/org/telegram/messenger/AndroidUtilities.java b/TMessagesProj/src/main/java/org/telegram/messenger/AndroidUtilities.java
+index 73bbe6670..30c25b5fa 100644
+--- a/TMessagesProj/src/main/java/org/telegram/messenger/AndroidUtilities.java
++++ b/TMessagesProj/src/main/java/org/telegram/messenger/AndroidUtilities.java
+@@ -40,12 +40,16 @@ import android.graphics.BitmapFactory;
+ import android.graphics.Canvas;
+ import android.graphics.Color;
+ import android.graphics.ColorMatrix;
++import android.graphics.ColorMatrixColorFilter;
+ import android.graphics.Matrix;
+ import android.graphics.Paint;
+ import android.graphics.Point;
++import android.graphics.PorterDuff;
++import android.graphics.PorterDuffXfermode;
+ import android.graphics.Rect;
+ import android.graphics.RectF;
+ import android.graphics.Typeface;
++import android.graphics.Xfermode;
+ import android.graphics.drawable.BitmapDrawable;
+ import android.graphics.drawable.ColorDrawable;
+ import android.graphics.drawable.Drawable;
+@@ -6911,6 +6915,16 @@ public class AndroidUtilities {
+         return true;
+     }
+ 
++    public static Bitmap applyColorMatrix(Bitmap bitmap, ColorMatrix matrix) {
++        final Paint paint = new Paint();
++        paint.setColorFilter(new ColorMatrixColorFilter(matrix));
++        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC));
++
++        final Bitmap result = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
++        final Canvas canvas = new Canvas(result);
++        canvas.drawBitmap(bitmap, 0, 0, paint);
++        return result;
++    }
+ 
+     public static int applyColorMatrix(int argb, ColorMatrix matrix) {
+         float[] m = matrix.getArray();
+diff --git a/TMessagesProj/src/main/java/org/telegram/messenger/BotForumHelper.java b/TMessagesProj/src/main/java/org/telegram/messenger/BotForumHelper.java
+index 3bf03bfd4..f0ed039d5 100644
+--- a/TMessagesProj/src/main/java/org/telegram/messenger/BotForumHelper.java
++++ b/TMessagesProj/src/main/java/org/telegram/messenger/BotForumHelper.java
+@@ -101,6 +101,11 @@ public class BotForumHelper extends BaseController {
+             new BotForumTextDraftUpdateNotification(userId, topicId, draftMessage.messageObject, isNew));
+     }
+ 
++    public boolean hasBotForumDrafts(long userId, int topicId) {
++        LongSparseArray<BotDraftMessage> messages = botTextDraftsByRandomIds.get(userId, topicId);
++        return messages != null && messages.size() > 0;
++    }
++
+     public MessageObject onBotForumDraftCheckNewMessages(long userId, int topicId, int messageId, String message) {
+         LongSparseArray<BotDraftMessage> messages = botTextDraftsByRandomIds.get(userId, topicId);
+         if (messages == null) {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java b/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java
+index 6b98be792..31617bc31 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java
+@@ -72,9 +72,11 @@ import org.telegram.messenger.MessagesController;
+ import org.telegram.messenger.R;
+ import org.telegram.messenger.SharedConfig;
+ import org.telegram.messenger.Utilities;
++import org.telegram.messenger.utils.ViewOutlineProviderImpl;
+ import org.telegram.ui.Components.AnimatedFloat;
+ import org.telegram.ui.Components.BackButtonMenu;
+ import org.telegram.ui.EmptyBaseFragment;
++import org.telegram.ui.GradientHeaderActivity;
+ import org.telegram.ui.MainTabsActivity;
+ import org.telegram.ui.bots.BotWebViewSheet;
+ import org.telegram.ui.Components.Bulletin;
+@@ -2019,16 +2021,13 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
+         containerView.setTranslationY(0);
+ 
+         if (preview) {
+-            fragmentView.setOutlineProvider(new ViewOutlineProvider() {
+-                @Override
+-                public void getOutline(View view, Outline outline) {
+-                    outline.setRoundRect(0,
+-                        isSupportEdgeToEdge ? 0 : AndroidUtilities.statusBarHeight,
+-                        view.getMeasuredWidth(), view.getMeasuredHeight(), dp(6));
+-                }
+-            });
++            fragmentView.setOutlineProvider(ViewOutlineProviderImpl.boundsWithPaddingRoundRect(0, dp(menu == null ? 24 : 12)));
+             fragmentView.setClipToOutline(true);
+             fragmentView.setElevation(dp(4));
++            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
++                 fragmentView.setOutlineSpotShadowColor(0xB0000000);
++                 fragmentView.setOutlineAmbientShadowColor(0xB0000000);
++            }
+             if (previewBackgroundDrawable == null) {
+                 previewBackgroundDrawable = new ColorDrawable(0x2e000000);
+             }
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/FloatingToolbar.java b/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/FloatingToolbar.java
+index c6f681fdd..fc38132e4 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/FloatingToolbar.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ActionBar/FloatingToolbar.java
+@@ -52,7 +52,6 @@ import android.view.View;
+ import android.view.View.MeasureSpec;
+ import android.view.View.OnLayoutChangeListener;
+ import android.view.ViewGroup;
+-import android.view.ViewOutlineProvider;
+ import android.view.animation.Animation;
+ import android.view.animation.AnimationSet;
+ import android.view.animation.AnimationUtils;
+@@ -82,6 +81,8 @@ import org.telegram.messenger.UserConfig;
+ import org.telegram.messenger.Utilities;
+ import org.telegram.messenger.utils.GradientProtectionDrawable;
+ import org.telegram.ui.Components.LayoutHelper;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
++import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
+ 
+ import java.util.ArrayList;
+ import java.util.Arrays;
+@@ -141,9 +142,16 @@ public final class FloatingToolbar {
+     
+     private final Theme.ResourcesProvider resourcesProvider;
+ 
++    BlurredBackgroundDrawableViewFactory blurredBackgroundDrawableViewFactory;
++
+     public FloatingToolbar(Context context, View windowView, int style, Theme.ResourcesProvider resourcesProvider) {
++        this(context, windowView, style, resourcesProvider, null);
++    }
++
++    public FloatingToolbar(Context context, View windowView, int style, Theme.ResourcesProvider resourcesProvider, BlurredBackgroundDrawableViewFactory factory) {
+         mWindowView = windowView;
+         currentStyle = style;
++        blurredBackgroundDrawableViewFactory = factory;
+         this.resourcesProvider = resourcesProvider;
+         mPopup = new FloatingToolbarPopup(context, windowView);
+     }
+@@ -1235,13 +1243,6 @@ public final class FloatingToolbar {
+                 super(popup.mContext);
+                 this.mPopup = popup;
+                 setVerticalScrollBarEnabled(false);
+-                setOutlineProvider(new ViewOutlineProvider() {
+-                    @Override
+-                    public void getOutline(View view, Outline outline) {
+-                    outline.setRoundRect(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight() + dp(6), dp(6));
+-                    }
+-                });
+-                setClipToOutline(true);
+             }
+ 
+             @Override
+@@ -1451,18 +1452,27 @@ public final class FloatingToolbar {
+         contentContainer.setElevation(dp(1));
+         contentContainer.setFocusable(true);
+         contentContainer.setFocusableInTouchMode(true);
+-        GradientDrawable shape = new GradientDrawable();
+-        shape.setShape(GradientDrawable.RECTANGLE);
+-        int r = dp(12);
+-        shape.setCornerRadii(new float[] { r, r, r, r, r, r, r, r });
+-        if (currentStyle == STYLE_DIALOG) {
+-            shape.setColor(getThemedColor(Theme.key_dialogBackground));
+-        } else if (currentStyle == STYLE_BLACK) {
+-            shape.setColor(0xf9222222);
+-        } else if (currentStyle == STYLE_THEME) {
+-            shape.setColor(getThemedColor(Theme.key_windowBackgroundWhite));
++
++        if (blurredBackgroundDrawableViewFactory != null) {
++            contentContainer.setBackground(blurredBackgroundDrawableViewFactory
++                .create(contentContainer, true)
++                .setColorProvider(BlurredBackgroundProviderImpl.photoViewerMenu(resourcesProvider))
++                .setRadius(dp(12)));
++        } else {
++            GradientDrawable shape = new GradientDrawable();
++            shape.setShape(GradientDrawable.RECTANGLE);
++            int r = dp(12);
++            shape.setCornerRadii(new float[] { r, r, r, r, r, r, r, r });
++            if (currentStyle == STYLE_DIALOG) {
++                shape.setColor(getThemedColor(Theme.key_dialogBackground));
++            } else if (currentStyle == STYLE_BLACK) {
++                shape.setColor(0xf9222222);
++            } else if (currentStyle == STYLE_THEME) {
++                shape.setColor(getThemedColor(Theme.key_windowBackgroundWhite));
++            }
++            contentContainer.setBackground(shape);
+         }
+-        contentContainer.setBackground(shape);
++
+         contentContainer.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+         contentContainer.setClipToOutline(true);
+         return contentContainer;
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/AvatarPreviewer.java b/TMessagesProj/src/main/java/org/telegram/ui/AvatarPreviewer.java
+index c09fe4410..3339a7cff 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/AvatarPreviewer.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/AvatarPreviewer.java
+@@ -8,8 +8,10 @@ import android.animation.AnimatorSet;
+ import android.animation.ValueAnimator;
+ import android.annotation.SuppressLint;
+ import android.content.Context;
++import android.graphics.Bitmap;
+ import android.graphics.Canvas;
+ import android.graphics.Color;
++import android.graphics.Matrix;
+ import android.graphics.PixelFormat;
+ import android.graphics.drawable.BitmapDrawable;
+ import android.graphics.drawable.Drawable;
+@@ -27,8 +29,11 @@ import android.widget.FrameLayout;
+ 
+ import androidx.annotation.NonNull;
+ import androidx.core.content.ContextCompat;
++import androidx.core.graphics.Insets;
+ import androidx.core.math.MathUtils;
+ import androidx.core.util.Consumer;
++import androidx.core.view.ViewCompat;
++import androidx.core.view.WindowInsetsCompat;
+ 
+ import org.telegram.messenger.AndroidUtilities;
+ import org.telegram.messenger.FileLoader;
+@@ -39,6 +44,7 @@ import org.telegram.messenger.MessagesController;
+ import org.telegram.messenger.NotificationCenter;
+ import org.telegram.messenger.R;
+ import org.telegram.messenger.UserConfig;
++import org.telegram.messenger.utils.ViewOutlineProviderImpl;
+ import org.telegram.tgnet.TLRPC;
+ import org.telegram.ui.ActionBar.ActionBarMenuItem;
+ import org.telegram.ui.ActionBar.ActionBarMenuSubItem;
+@@ -50,9 +56,13 @@ import org.telegram.ui.Components.CubicBezierInterpolator;
+ import org.telegram.ui.Components.LayoutHelper;
+ import org.telegram.ui.Components.MediaActionDrawable;
+ import org.telegram.ui.Components.RadialProgress2;
+-import org.telegram.ui.Stories.RoundRectOutlineProvider;
++import org.telegram.ui.Components.ScrimOptions;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
++import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
++import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceBitmap;
++import org.telegram.ui.Components.blur3.utils.Blur3Utils;
++import org.telegram.ui.Components.chat.ViewPositionWatcher;
+ 
+-import java.util.Collections;
+ import java.util.Objects;
+ 
+ public class AvatarPreviewer {
+@@ -107,6 +117,13 @@ public class AvatarPreviewer {
+                     }
+                 }
+             };
++            ViewCompat.setOnApplyWindowInsetsListener(this.layout, (v, insets) -> {
++                final Insets r = insets.getInsets(WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.systemBars());
++                if (layout == v && layout.container != null) {
++                    layout.container.setPadding(r.left, r.top, r.right, r.bottom);
++                }
++                return WindowInsetsCompat.CONSUMED;
++            });
+         }
+ 
+         layout.setData(data);
+@@ -115,18 +132,25 @@ public class AvatarPreviewer {
+             if (layout.getParent() != null) {
+                 windowManager.removeView(layout);
+             }
+-            final WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams(
++            final WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+                     WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                     0, PixelFormat.TRANSLUCENT
+             );
+-            if (Build.VERSION.SDK_INT >= 21) {
+-                layoutParams.flags = WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
+-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+-                        WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
+-            }
+-            AndroidUtilities.setPreferredMaxRefreshRate(windowManager, layout, layoutParams);
+-            windowManager.addView(layout, layoutParams);
++
++            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
++            params.flags |= WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
++                    | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
++                    | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR
++                    | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
++                    | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
++                    | WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
++                    | WindowManager.LayoutParams.FLAG_FULLSCREEN
++                    | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
++
++
++            AndroidUtilities.setPreferredMaxRefreshRate(windowManager, layout, params);
++            windowManager.addView(layout, params);
+             parentContainer.requestDisallowInterceptTouchEvent(true);
+             visible = true;
+         }
+@@ -360,11 +384,15 @@ public class AvatarPreviewer {
+         private final ActionBarPopupWindow.ActionBarPopupWindowLayout menu;
+         private final Callback callback;
+         private final Theme.ResourcesProvider resourcesProvider;
++        private final BlurredBackgroundSourceBitmap iBlur3SourceBitmap = new BlurredBackgroundSourceBitmap();
++        private final BlurredBackgroundDrawableViewFactory iBlur3Factory = new BlurredBackgroundDrawableViewFactory(iBlur3SourceBitmap);
+ 
+         private AnimatorSet openAnimator;
+         private boolean showing;
+         private MenuItem[] menuItems;
+         private View blurView;
++        private Bitmap blurBitmap;
++        private final Matrix blurMatrix = new Matrix();
+         private boolean preparingBlur;
+ 
+         private String videoFileName;
+@@ -375,7 +403,8 @@ public class AvatarPreviewer {
+             super(context);
+             this.callback = callback;
+             this.resourcesProvider = resourcesProvider;
+-            setWillNotDraw(false);
++
++            iBlur3Factory.setSourceRootView(new ViewPositionWatcher(this), this);
+ 
+             blurView = new View(context);
+             blurView.setOnClickListener(v -> setShowing(false));
+@@ -392,37 +421,47 @@ public class AvatarPreviewer {
+                     int width = right - left - getPaddingLeft() - getPaddingRight();
+                     int height = bottom - top - getPaddingTop() - getPaddingBottom();
+ 
+-                    int maxAvatarSize = Math.min(width, height) - dp(16);
++                    int maxAvatarSize = Math.min(width, height) - dp(24);
+                     int minAvatarSize = Math.min(dp(60), maxAvatarSize);
+ 
+-                    int maxMenuHeight = height - minAvatarSize - dp(16 + 24);
++                    int maxMenuHeight = height - minAvatarSize - dp(24 + 24);
+                     menu.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(maxMenuHeight, MeasureSpec.AT_MOST));
+ 
+-                    int avatarSize = MathUtils.clamp(height - menu.getMeasuredHeight() - dp(16 + 24), minAvatarSize, maxAvatarSize);
++                    int avatarSize = MathUtils.clamp(height - menu.getMeasuredHeight() - dp(24 + 24), minAvatarSize, maxAvatarSize);
+                     avatarView.measure(MeasureSpec.makeMeasureSpec(avatarSize, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(avatarSize, MeasureSpec.EXACTLY));
+ 
+-                    int verticalOffset = (height - avatarSize - menu.getMeasuredHeight() - dp(16 + 24)) / 2;
++                    int verticalOffset = (height - avatarSize - menu.getMeasuredHeight() - dp(24 + 24)) / 2;
+ 
+                     FrameLayout.LayoutParams avatarLayoutParams = (LayoutParams) avatarView.getLayoutParams();
+                     FrameLayout.LayoutParams menuLayoutParams = (LayoutParams) menu.getLayoutParams();
+ 
+                     avatarLayoutParams.topMargin = verticalOffset + dp(8);
+-                    menuLayoutParams.topMargin = verticalOffset + dp(8) + avatarSize;
++                    menuLayoutParams.topMargin = verticalOffset + dp(8) + avatarSize + dp(4);
++                    menuLayoutParams.leftMargin = dp(4);
++                    menuLayoutParams.rightMargin = dp(4);
+ 
+                     super.onLayout(changed, left, top, right, bottom);
+                 }
+             };
+-            container.setFitsSystemWindows(true);
+             addView(container, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+ 
+             avatarView = new AvatarView(context, resourcesProvider);
+-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+-                avatarView.setElevation(dp(4));
+-                avatarView.setClipToOutline(true);
+-            }
++            avatarView.setOutlineProvider(ViewOutlineProviderImpl.boundsWithPaddingRoundRect(0, dp(12)));
++            avatarView.setElevation(dp(4));
++            avatarView.setClipToOutline(true);
+             container.addView(avatarView, LayoutHelper.createFrame(0, 0, Gravity.CENTER_HORIZONTAL));
+ 
++            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
++                avatarView.setOutlineSpotShadowColor(0x80000000);
++                avatarView.setOutlineAmbientShadowColor(0x80000000);
++            }
++
+             menu = new ActionBarPopupWindow.ActionBarPopupWindowLayout(context, R.drawable.popup_fixed_alert, resourcesProvider, 0);
++            menu.setBackground(iBlur3Factory.create(menu)
++                .setColorProvider(BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider))
++                .setPadding(dp(8))
++                .setHasPadding(true)
++                .setRadius(dp(12)));
+             container.addView(menu, LayoutHelper.createFrameRelatively(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.START));
+         }
+ 
+@@ -493,6 +532,7 @@ public class AvatarPreviewer {
+                 blurView.setBackground(null);
+                 AndroidUtilities.runOnUIThread(this::prepareBlurBitmap);
+             }
++            checkBitmapMatrix();
+         }
+ 
+         private void prepareBlurBitmap() {
+@@ -500,11 +540,21 @@ public class AvatarPreviewer {
+                 return;
+             }
+             preparingBlur = true;
+-            AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
++            ScrimOptions.makeGlobalBlurBitmaps((bitmapBg, bitmapOptions) -> {
+                 //noinspection deprecation
+-                blurView.setBackground(new BitmapDrawable(bitmap));
++                blurBitmap = bitmapBg;
++                blurView.setBackground(new BitmapDrawable(bitmapBg));
+                 preparingBlur = false;
+-            }, 6f, 7, this, Collections.singletonList(this));
++                iBlur3SourceBitmap.setBitmap(bitmapOptions);
++                checkBitmapMatrix();
++            });
++        }
++
++        private void checkBitmapMatrix() {
++            Blur3Utils.checkBitmapSourceMatrixScale(iBlur3SourceBitmap, this);
++            if (menu != null) {
++                menu.invalidate();
++            }
+         }
+ 
+         public void setData(Data data) {
+@@ -622,14 +672,10 @@ public class AvatarPreviewer {
+ 
+         public AvatarView(Context context, Theme.ResourcesProvider resourcesProvider) {
+             super(context);
+-            setWillNotDraw(false);
+-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+-                setOutlineProvider(new RoundRectOutlineProvider(6));
+-            }
+ 
+             backupImageView = new BackupImageView(context);
+             backupImageView.setAspectFit(true);
+-            backupImageView.setRoundRadius(dp(6));
++            backupImageView.setRoundRadius(dp(12));
+             addView(backupImageView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+ 
+             radialProgress = new RadialProgress2(this, resourcesProvider);
+@@ -666,7 +712,7 @@ public class AvatarPreviewer {
+         }
+ 
+         @Override
+-        protected void dispatchDraw(Canvas canvas) {
++        protected void dispatchDraw(@NonNull Canvas canvas) {
+             super.dispatchDraw(canvas);
+ 
+             if (showProgress) {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java
+index a5e743b3d..345bcdef0 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java
+@@ -188,6 +188,7 @@ import org.telegram.messenger.support.LongSparseIntArray;
+ import org.telegram.messenger.utils.OnPostDrawView;
+ import org.telegram.messenger.utils.PhotoUtilities;
+ import org.telegram.messenger.utils.RectFMergeBounding;
++import org.telegram.messenger.utils.ViewOutlineProviderImpl;
+ import org.telegram.messenger.utils.tlutils.TlUtils;
+ import org.telegram.messenger.voip.VoIPService;
+ import org.telegram.tgnet.ConnectionsManager;
+@@ -260,6 +261,7 @@ import org.telegram.ui.Components.blur3.DownscaleScrollableNoiseSuppressor;
+ import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundColorProviderThemed;
+ import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
+ import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceWrapped;
++import org.telegram.ui.Components.blur3.utils.Blur3Utils;
+ import org.telegram.ui.Components.chat.ChatActivityBottomViewsVisibilityController;
+ import org.telegram.ui.Components.chat.ChatActivityTopFadeView;
+ import org.telegram.ui.Components.chat.layouts.ChatActivityActionsButtonsLayout;
+@@ -395,6 +397,7 @@ public class ChatActivity extends BaseFragment implements
+     private View progressView2;
+     private FrameLayout bottomOverlay;
+     private ChatInputViewsContainer chatInputViewsContainer;
++    private View roundVideoRecordBackground;
+ 
+     private FrameLayout chatInputBubbleContainer;
+     private FrameLayout chatInputInAppContainer;
+@@ -982,6 +985,8 @@ public class ChatActivity extends BaseFragment implements
+         destroyTextureView();
+     };
+ 
++    private final BlurredBackgroundSourceBitmap scrimBlur3SourceBitmap = new BlurredBackgroundSourceBitmap();
++    private final BlurredBackgroundDrawableViewFactory scrimBlur3Factory = new BlurredBackgroundDrawableViewFactory(scrimBlur3SourceBitmap);
+     private Bitmap scrimBlurBitmap;
+     private BitmapShader scrimBlurBitmapShader;
+     private Paint scrimBlurBitmapPaint;
+@@ -2552,6 +2557,7 @@ public class ChatActivity extends BaseFragment implements
+         navbarContentDrawableFactory.setLinkedViewsRef(glassAttachedViews);
+         glassBackgroundDrawableFactory.setLinkedViewsRef(glassAttachedViews);
+         glassBackgroundDrawableFactoryFrosted.setLinkedViewsRef(glassAttachedViews);
++        scrimBlur3Factory.setLinkedViewsRef(new ReferenceList<>());
+     }
+ 
+     @Override
+@@ -4497,6 +4503,7 @@ public class ChatActivity extends BaseFragment implements
+         glassBackgroundDrawableFactory.setSourceRootView(viewPositionWatcher, contentView);
+         glassBackgroundDrawableFactoryFrosted.setSourceRootView(viewPositionWatcher, contentView);
+         navbarContentDrawableFactory.setSourceRootView(viewPositionWatcher, contentView);
++        scrimBlur3Factory.setSourceRootView(viewPositionWatcher, contentView);
+ 
+         contentView.setOccupyStatusBar(!inBubbleMode && !isInsideContainer && !inPreviewMode);
+ 
+@@ -5165,7 +5172,7 @@ public class ChatActivity extends BaseFragment implements
+                     float progress = Math.min(1f, pullingDownOffset / AndroidUtilities.dp(110));
+                     c.translate(isSideMenued() ? lerp(dp(32), dp(SIDE_MENU_WIDTH), getSideMenuAlpha()) : 0,
+                         -(windowInsetsStateHolder.getAnimatedMaxBottomInset() + dp(10) +
+-                        chatInputViewsContainer.getInputBubbleHeight()));
++                        chatInputViewsContainer.getInputBubbleHeight() + getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)));
+                     pullingDownDrawable.draw(c, chatListView, progress, 1f - pullingDownAnimateProgress);
+ 
+                     c.restore();
+@@ -5192,7 +5199,7 @@ public class ChatActivity extends BaseFragment implements
+                     updateSkeletonColors();
+                     updateSkeletonGradient();
+ 
+-                    int lastTop = getHeight() - blurredViewBottomOffset - (int) windowInsetsStateHolder.getAnimatedMaxBottomInset() - dp(44 + 7 + 9 - 3);
++                    int lastTop = getHeight() - blurredViewBottomOffset - (int) (windowInsetsStateHolder.getAnimatedMaxBottomInset() + getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)) - dp(44 + 7 + 9 - 3);
+                     int j = 0;
+ 
+                     int childMaxTop = Integer.MAX_VALUE;
+@@ -7884,9 +7891,19 @@ public class ChatActivity extends BaseFragment implements
+         chatActivityEnterView.setViewParentForEmoji(chatInputInAppContainer);
+ 
+         chatInputBubbleContainer.addView(chatActivityEnterView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM, 7, 0, 7, 0));
+-        contentView.addView(chatInputViewsContainer.getFadeView(), LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+-        contentView.addView(chatInputViewsContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+ 
++        int chatListIndex = contentView.indexOfChild(chatListView);
++        chatListIndex = chatListIndex < 0 ? contentView.getChildCount() : (chatListIndex + 1);
++
++        roundVideoRecordBackground = new View(context);
++        roundVideoRecordBackground.setVisibility(View.GONE);
++        BlurredBackgroundDrawable d = navbarContentDrawableFactory.create(roundVideoRecordBackground);
++        d.setAlpha(232);
++        roundVideoRecordBackground.setBackground(d);
++
++        contentView.addView(roundVideoRecordBackground, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
++        contentView.addView(chatInputViewsContainer.getFadeView(), chatListIndex, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
++        contentView.addView(chatInputViewsContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+ 
+         if (chatMode != MODE_EDIT_BUSINESS_LINK) {
+             chatActivityEnterView.checkChannelRights();
+@@ -9649,6 +9666,8 @@ public class ChatActivity extends BaseFragment implements
+         return topicsTabs != null && topicsTabs.sidemenuAnimating;
+     }
+ 
++    private long lastSwitchTopicTime;
++
+     private void createTopicsTabs() {
+         if (topicsTabs != null || getContext() == null) {
+             return;
+@@ -9656,66 +9675,64 @@ public class ChatActivity extends BaseFragment implements
+         if (pinnedMessageView == null) {
+             createPinnedMessageView();
+         }
+-        topicsTabs = new TopicsTabsView(getContext(), this, currentAccount, getDialogId(), getResourceProvider()) {
+-            @Override
+-            public void updateSidemenuPosition() {
+-                super.updateSidemenuPosition();
+-                invalidateChatListViewTopPadding();
+-                AndroidUtilities.forEachViews(chatListView, view -> {
+-                    if (view instanceof ChatMessageCell) {
+-                        final ChatMessageCell cell = (ChatMessageCell) view;
+-                        cell.isAllChats = isAllChats();
+-                        cell.isSideMenued = isSideMenued();
+-                        final boolean newSideMenuEnabled = isSideMenuEnabled();
+-                        if (cell.isSideMenuEnabled != newSideMenuEnabled) {
+-                            cell.isSideMenuEnabled = newSideMenuEnabled;
+-                            final int position = chatListView.getChildAdapterPosition(view);
+-                            cell.relayout();
+-                            if (position >= 0) {
+-                                chatAdapter.notifyItemChanged(position);
+-                            }
+-                        }
+-                        cell.sideMenuAlpha = getSideMenuAlpha();
+-                        final int newSideMenuWidth = getSideMenuWidth();
+-                        if (cell.sideMenuWidth != newSideMenuWidth) {
+-                            cell.sideMenuWidth = newSideMenuWidth;
+-                            cell.updateTranslation();
+-                            cell.invalidate();
+-                        }
+-                    } else if (view instanceof ChatActionCell) {
+-                        final ChatActionCell cell = (ChatActionCell) view;
+-                        cell.isAllChats = isAllChats();
+-                        cell.isSideMenued = isSideMenued();
+-                        cell.isSideMenuEnabled = isSideMenuEnabled();
+-                        cell.sideMenuAlpha = getSideMenuAlpha();
+-                        final int newSideMenuWidth = getSideMenuWidth();
+-                        if (cell.sideMenuWidth != newSideMenuWidth) {
+-                            cell.sideMenuWidth = newSideMenuWidth;
+-                            cell.invalidate();
+-                        }
+-                    } else if (view instanceof ChatUnreadCell) {
+-                        ((ChatUnreadCell) view).getTextView().setTranslationX(getSideMenuWidth() / 2f);
+-                    } else if (view instanceof BotAskCell) {
+-                        view.invalidate();
+-                    } else if (view instanceof BotHelpCell) {
+-                        view.invalidate();
++        topicsTabs = new TopicsTabsView(getContext(), this, currentAccount, getDialogId(), getResourceProvider());
++        topicsTabs.doOnUpdateSideMenuPosition(() -> {
++            invalidateChatListViewTopPadding();
++            AndroidUtilities.forEachViews(chatListView, view -> {
++                if (view instanceof ChatMessageCell) {
++                    final ChatMessageCell cell = (ChatMessageCell) view;
++                    cell.isAllChats = isAllChats();
++                    cell.isSideMenued = isSideMenued();
++                    final boolean newSideMenuEnabled = isSideMenuEnabled();
++                    if (cell.isSideMenuEnabled != newSideMenuEnabled) {
++                        cell.isSideMenuEnabled = newSideMenuEnabled;
++                        final int position = chatListView.getChildAdapterPosition(view);
++                        cell.relayout();
++                        if (position >= 0) {
++                            chatAdapter.notifyItemChanged(position);
++                        }
++                    }
++                    cell.sideMenuAlpha = getSideMenuAlpha();
++                    final int newSideMenuWidth = getSideMenuWidth();
++                    if (cell.sideMenuWidth != newSideMenuWidth) {
++                        cell.sideMenuWidth = newSideMenuWidth;
++                        cell.updateTranslation();
++                        cell.invalidate();
+                     }
+-                });
+-                if (topPanelLayout != null) {
+-                    topPanelLayout.setPadding(dp(7) + getSideMenuWidth(), dp(7), dp(7), dp(7));
+-                }
+-                if (floatingDateView != null) {
+-                    floatingDateView.setTranslationX(getSideMenuWidth() / 2f);
+-                }
+-                if (floatingTopicSeparator != null) {
+-                    floatingTopicSeparator.setTranslationX(getSideMenuWidth() / 2f);
+-                }
+-                if (emptyViewContainer != null) {
+-                    emptyViewContainer.setTranslationX(getSideMenuWidth() / 2.f);
++                } else if (view instanceof ChatActionCell) {
++                    final ChatActionCell cell = (ChatActionCell) view;
++                    cell.isAllChats = isAllChats();
++                    cell.isSideMenued = isSideMenued();
++                    cell.isSideMenuEnabled = isSideMenuEnabled();
++                    cell.sideMenuAlpha = getSideMenuAlpha();
++                    final int newSideMenuWidth = getSideMenuWidth();
++                    if (cell.sideMenuWidth != newSideMenuWidth) {
++                        cell.sideMenuWidth = newSideMenuWidth;
++                        cell.invalidate();
++                    }
++                } else if (view instanceof ChatUnreadCell) {
++                    ((ChatUnreadCell) view).getTextView().setTranslationX(getSideMenuWidth() / 2f);
++                } else if (view instanceof BotAskCell) {
++                    view.invalidate();
++                } else if (view instanceof BotHelpCell) {
++                    view.invalidate();
+                 }
+-                checkUi_topFade();
++            });
++            if (topPanelLayout != null) {
++                topPanelLayout.setPadding(dp(7) + getSideMenuWidth(), dp(7), dp(7), dp(7));
+             }
+-        };
++            if (floatingDateView != null) {
++                floatingDateView.setTranslationX(getSideMenuWidth() / 2f);
++            }
++            if (floatingTopicSeparator != null) {
++                floatingTopicSeparator.setTranslationX(getSideMenuWidth() / 2f);
++            }
++            if (emptyViewContainer != null) {
++                emptyViewContainer.setTranslationX(getSideMenuWidth() / 2.f);
++            }
++            checkInsets();
++            checkUi_topFade();
++        });
+ 
+         topicsTabs.setSideMenuBackgroundDrawable(glassBackgroundDrawableFactory.create(topicsTabs, BlurredBackgroundProviderImpl.topPanelChatActivity(themeDelegate)));
+         topicsTabs.setTopMenuBackgroundDrawable(glassBackgroundDrawableFactory.create(topicsTabs, BlurredBackgroundProviderImpl.topPanelChatActivity(themeDelegate)));
+@@ -9744,6 +9761,7 @@ public class ChatActivity extends BaseFragment implements
+                 return;
+             }
+ 
++            lastSwitchTopicTime = SystemClock.uptimeMillis();
+             topicChangedFromMessage = fromMessage;
+             if (fromMessage || true) {
+                 if (topicId == 0) {
+@@ -9811,9 +9829,9 @@ public class ChatActivity extends BaseFragment implements
+                     chatActivityEnterView.hidePopup(false);
+                 }
+                 chatActivityEnterView.updateFieldHint(true);
+-                if (getParentActivity() != null && !UserObject.isBotForum(currentUser)) {
+-                    AndroidUtilities.hideKeyboard(getParentActivity().getCurrentFocus());
+-                }
++                //if (getParentActivity() != null && !UserObject.isBotForum(currentUser) && topicsTabs.getCurrentTabsPosition() != TopicsTabsView.Position.BOTTOM) {
++                //    AndroidUtilities.hideKeyboard(getParentActivity().getCurrentFocus());
++                //}
+             }
+             if (topic != null) {
+                 getMessagesController().getTopicsController().getTopicRepliesCount(dialog_id, topic.id);
+@@ -9832,6 +9850,7 @@ public class ChatActivity extends BaseFragment implements
+         topicsTabs.setOnDialogSelected((dialogId, fromMessage) -> {
+             if (dialogId == getTopicId()) return;
+ 
++            lastSwitchTopicTime = SystemClock.uptimeMillis();
+             topicChangedFromMessage = fromMessage;
+             if (fromMessage || true) {
+                 if (dialogId == 0) {
+@@ -9911,9 +9930,9 @@ public class ChatActivity extends BaseFragment implements
+             if (chatActivityEnterView != null) {
+                 chatActivityEnterView.hidePopup(false);
+                 chatActivityEnterView.updateFieldHint(true);
+-                if (getParentActivity() != null) {
+-                    AndroidUtilities.hideKeyboard(getParentActivity().getCurrentFocus());
+-                }
++                //if (getParentActivity() != null && topicsTabs.getCurrentTabsPosition() != TopicsTabsView.Position.BOTTOM) {
++                //    AndroidUtilities.hideKeyboard(getParentActivity().getCurrentFocus());
++                //}
+             }
+             applyDraftMaybe(true, true);
+ 
+@@ -9925,6 +9944,12 @@ public class ChatActivity extends BaseFragment implements
+             }
+             //
+         });
++
++        final int index2 = contentView.indexOfChild(sideControlsButtonsLayout);
++        if (index2 >= 0) {
++            index = index2 + 1;
++        }
++
+         contentView.addView(topicsTabs, index, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
+         topicsTabs.updateSidemenuPosition();
+         if (mentionContainer != null) {
+@@ -10454,17 +10479,15 @@ public class ChatActivity extends BaseFragment implements
+             animators.add(scrimPaintAlphaAnimator = ValueAnimator.ofFloat(0, value));
+ 
+             if (blur) {
+-                AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
+-                    scrimBlurBitmap = bitmap;
+-
++                ScrimOptions.makeGlobalBlurBitmaps((bitmapBg, bitmapOptions) -> {
++                    scrimBlurBitmap = bitmapBg;
+                     scrimBlurBitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                     scrimBlurBitmapPaint.setShader(scrimBlurBitmapShader = new BitmapShader(scrimBlurBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+-                    ColorMatrix colorMatrix = new ColorMatrix();
+-                    AndroidUtilities.adjustSaturationColorMatrix(colorMatrix, Theme.isCurrentThemeDark() ? .08f : +.25f);
+-                    AndroidUtilities.adjustBrightnessColorMatrix(colorMatrix, Theme.isCurrentThemeDark() ? -.02f : -.07f);
+-                    scrimBlurBitmapPaint.setColorFilter(new ColorMatrixColorFilter(colorMatrix));
+                     scrimBlurMatrix = new Matrix();
+-                }, 14);
++                    scrimBlur3SourceBitmap.setBitmap(bitmapOptions);
++                    Blur3Utils.checkBitmapSourceMatrixScale(scrimBlur3SourceBitmap, fragmentView);
++                    scrimBlur3Factory.invalidateAllLinkedViews();
++                });
+             }
+         } else {
+             scrimViewProgress = scrimPaintAlpha / max;
+@@ -10585,6 +10608,7 @@ public class ChatActivity extends BaseFragment implements
+         if (sideControlsButtonsLayout != null) {
+             float baseTranslationY2 = -windowInsetsStateHolder.getAnimatedMaxBottomInset()
+                 - chatInputViewsContainer.getInputBubbleHeight()
++                - getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)
+                 - dp(ChatInputViewsContainer.INPUT_BUBBLE_BOTTOM + 4);
+             sideControlsButtonsLayout.setTranslationY(baseTranslationY2);
+         }
+@@ -10641,7 +10665,7 @@ public class ChatActivity extends BaseFragment implements
+ //            chatActivityEnterView.freezeEmojiView(false);
+ //        }
+         keyboardWasVisible = chatActivityEnterView.isKeyboardVisible();
+-        forwardingPreviewView = new MessagePreviewView(contentView.getContext(), this, messagePreviewParams, currentUser, currentChat, currentAccount, themeDelegate, startTab, replyingQuote != null && replyingQuote.outdated) {
++        forwardingPreviewView = new MessagePreviewView(contentView.getContext(), this, scrimBlur3Factory, messagePreviewParams, currentUser, currentChat, currentAccount, themeDelegate, startTab, replyingQuote != null && replyingQuote.outdated) {
+ 
+             @Override
+             protected void removeLink() {
+@@ -11490,6 +11514,12 @@ public class ChatActivity extends BaseFragment implements
+             }).start();
+ 
+             blurredView.setTag(1);
++
++            ScrimOptions.makeGlobalBlurBitmaps((bitmapBg, bitmapOptions) -> {
++                scrimBlur3SourceBitmap.setBitmap(bitmapOptions);
++                Blur3Utils.checkBitmapSourceMatrixScale(scrimBlur3SourceBitmap, fragmentView);
++                scrimBlur3Factory.invalidateAllLinkedViews();
++            });
+         } else if (!show && blurredView != null && blurredView.getTag() != null) {
+             blurredView.animate().setListener(null).cancel();
+             blurredView.animate().setListener(new HideViewAfterAnimation(blurredView)).alpha(0).start();
+@@ -11606,7 +11636,8 @@ public class ChatActivity extends BaseFragment implements
+             pinnedViewH = Math.max(pinnedViewH, hashtagSearchTabs.getCurrentHeight());
+         }
+         float oldPadding = chatListViewPaddingTop;
+-        chatListViewPaddingTop = dp(4) + contentPaddingTop + (paddingTopHeight = topPanelViewH + pinnedViewH) + (topicsTabs != null ? dp(TopicsTabsView.TOP_TABS_HEIGHT + 7) * (1.0f - topicsTabs.sidemenuT) : 0);
++        chatListViewPaddingTop = dp(4) + contentPaddingTop + (paddingTopHeight = topPanelViewH + pinnedViewH)
++            + getTopicTabsSideSize(TopicsTabsView.Position.TOP);
+         chatListViewPaddingTop += blurredViewTopOffset;
+         chatListViewPaddingVisibleOffset = 0;
+         chatListViewPaddingTop += contentPanTranslation;
+@@ -11696,24 +11727,21 @@ public class ChatActivity extends BaseFragment implements
+             return;
+         }
+ 
+-        final int paddingBottomTarget;
+-        final float paddingBottomAnimated;
++        final float paddingBottom;
+         if (isInsideContainer) {
+-            paddingBottomAnimated = paddingBottomTarget = AndroidUtilities.navigationBarHeight;
++            paddingBottom = AndroidUtilities.navigationBarHeight;
+         } else {
+-            paddingBottomTarget = (int) (blurredViewBottomOffset + dp(9 + 7)
+-                + inputIslandHeightTarget
+-                + windowInsetsStateHolder.getInsets(WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars()).bottom);
+-            paddingBottomAnimated = blurredViewBottomOffset + dp(9 + 7)
+-                    + inputIslandHeightCurrent
+-                    + windowInsetsStateHolder.getAnimatedMaxBottomInset();
++            paddingBottom = blurredViewBottomOffset + dp(9 + 7)
++                + inputIslandHeightCurrent
++                + getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)
++                + windowInsetsStateHolder.getAnimatedMaxBottomInset();
+         }
+ 
+         final int paddingTop = (int) chatListViewPaddingTop;
+         if (topicsTabs != null) {
+             topicsTabs.setSideMenuBackgroundMarginTop(0);//Math.max(0, paddingTop - blurredViewTopOffset - dp(5)));
+         }
+-        chatListViewPaddingsAnimator.setPaddings(paddingTop, paddingBottomAnimated, paddingBottomTarget, wasManualScroll && !chatListView.fastScrollAnimationRunning);
++        chatListViewPaddingsAnimator.setPaddings(paddingTop, paddingBottom, wasManualScroll && !chatListView.fastScrollAnimationRunning);
+     }
+ 
+ 
+@@ -11743,7 +11771,7 @@ public class ChatActivity extends BaseFragment implements
+         if (undoView != null) {
+             undoView.setAdditionalTranslationY(
+                 windowInsetsStateHolder.getAnimatedMaxBottomInset() + dp(9 + 7)
+-                    + chatInputViewsContainer.getInputBubbleHeight());
++                    + chatInputViewsContainer.getInputBubbleHeight() + getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM));
+         }
+         if (messagesSearchListContainer != null) {
+             messagesSearchListContainer.setTranslationY(getHashtagTabsHeight() + contentPanTranslation);
+@@ -11753,7 +11781,7 @@ public class ChatActivity extends BaseFragment implements
+             hashtagHistoryView.setTranslationY(getHashtagTabsHeight() + contentPanTranslation);
+         }
+         if (topPanelLayout != null) {
+-            topPanelLayout.setTranslationY(contentPanTranslation + (topicsTabs != null ? (dp(TopicsTabsView.TOP_TABS_HEIGHT + 7) * (1f - topicsTabs.sidemenuT)) : 0));
++            topPanelLayout.setTranslationY(contentPanTranslation + getTopicTabsSideSize(TopicsTabsView.Position.TOP));
+         }
+     }
+ 
+@@ -14054,12 +14082,15 @@ public class ChatActivity extends BaseFragment implements
+         if (chatActivityEnterView == null || botButtons == null || userBlocked) {
+             return;
+         }
++
++        final boolean showBotKeyboard = SystemClock.uptimeMillis() - lastSwitchTopicTime > 700;
++
+         if (botButtons.messageOwner.reply_markup instanceof TLRPC.TL_replyKeyboardForceReply) {
+             SharedPreferences preferences = MessagesController.getMainSettings(currentAccount);
+             String tk = isTopic ? dialog_id + "_" + getTopicId() : "" + dialog_id;
+             if (preferences.getInt("answered_" + tk, 0) != botButtons.getId() && (replyingMessageObject == null || chatActivityEnterView.getFieldText() == null)) {
+                 botReplyButtons = botButtons;
+-                chatActivityEnterView.setButtons(botButtons);
++                chatActivityEnterView.setButtons(botButtons, showBotKeyboard, true);
+                 showFieldPanelForReply(botButtons);
+             }
+         } else {
+@@ -14067,7 +14098,7 @@ public class ChatActivity extends BaseFragment implements
+                 botReplyButtons = null;
+                 hideFieldPanel(true);
+             }
+-            chatActivityEnterView.setButtons(botButtons);
++            chatActivityEnterView.setButtons(botButtons, showBotKeyboard, true);
+         }
+     }
+ 
+@@ -15539,7 +15570,7 @@ public class ChatActivity extends BaseFragment implements
+ 
+                 if (messageObject.isSponsored()) {
+                     final float rTop = ViewPositionWatcher.computeYCoordinateInParent(messageCell, contentView);
+-                    final boolean isVisible = messageObject.viewsReloaded || rTop < contentView.getMeasuredHeight() - dp(9 + 32) - windowInsetsStateHolder.getAnimatedMaxBottomInset() - inputIslandHeightCurrent;
++                    final boolean isVisible = messageObject.viewsReloaded || rTop < contentView.getMeasuredHeight() - dp(9 + 32) - windowInsetsStateHolder.getAnimatedMaxBottomInset() - getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM) - inputIslandHeightCurrent;
+                     messageCell.setSponsoredMessageVisible(isVisible, isVisible);
+                     if (isVisible) {
+                         markSponsoredAsRead(messageObject);
+@@ -17187,6 +17218,13 @@ public class ChatActivity extends BaseFragment implements
+             canvas.restoreToCount(restoreCount);
+         }
+ 
++        @Override
++        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++            super.onSizeChanged(w, h, oldw, oldh);
++            Blur3Utils.checkBitmapSourceMatrixScale(scrimBlur3SourceBitmap, fragmentView);
++            scrimBlur3Factory.invalidateAllLinkedViews();
++        }
++
+         @Override
+         protected void dispatchDraw(Canvas canvas) {
+             /*
+@@ -18115,7 +18153,7 @@ public class ChatActivity extends BaseFragment implements
+                     childTop -= blurredViewTopOffset;
+                 } else if (child instanceof MessagePreviewView) {
+                     childTop = AndroidUtilities.statusBarHeight;
+-                } else if (child == searchViewPager) {
++                } else if (child == searchViewPager || child == roundVideoRecordBackground) {
+                     childTop = 0;
+                 } else if (child == messagesSearchListContainer) {
+                     if (isInsideContainer && parentChatActivity != null) {
+@@ -19568,6 +19606,7 @@ public class ChatActivity extends BaseFragment implements
+                 object.clipBottomAddition = (int) (blurredViewBottomOffset
+                     + dp(9)
+                     + windowInsetsStateHolder.getAnimatedMaxBottomInset()
++                    + getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)
+                     + inputIslandHeightCurrent);
+                 return object;
+             }
+@@ -24619,7 +24658,7 @@ public class ChatActivity extends BaseFragment implements
+         if (!arr.isEmpty()) {
+             if ((chatMode == MODE_SCHEDULED || chatMode == MODE_QUICK_REPLIES)) {
+                 replaceMessageObjects(arr, 0, true);
+-            } else if (UserObject.isBotForum(currentUser)) {
++            } else if (UserObject.isBot(currentUser) && BotForumHelper.getInstance(currentAccount).hasBotForumDrafts(currentUser.id, (int) getTopicId())) {
+                 replaceMessageObjects(arr, 0, false);
+             }
+         }
+@@ -25639,7 +25678,7 @@ public class ChatActivity extends BaseFragment implements
+                 pinnedMessageObjects.put(messageObject.getId(), messageObject);
+             }
+             MessageObject old = messagesDict[loadIndex].get(messageObject.getId());
+-            if (messageObject.getId() > 0 && old == null && UserObject.isBotForum(currentUser)) {
++            if (messageObject.getId() > 0 && old == null && UserObject.isBot(currentUser)) {
+                 old = BotForumHelper.getInstance(currentAccount).onBotForumDraftCheckNewMessages(currentUser.id, (int) getTopicId(), messageObject.getId(), messageObject.messageText.toString());
+                 if (old != null) {
+                     if (!messages.contains(old)) {
+@@ -28766,8 +28805,9 @@ public class ChatActivity extends BaseFragment implements
+                     return 0;
+                 }
+ 
+-                return Math.round(windowInsetsStateHolder.getAnimatedMaxBottomInset() +
+-                    (chatInputViewsContainer.getInputBubbleHeight() + dp(9 + 7)));
++                return Math.round(windowInsetsStateHolder.getAnimatedMaxBottomInset()
++                    + getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)
++                    + (chatInputViewsContainer.getInputBubbleHeight() + dp(9 + 7)));
+             }
+ 
+             @Override
+@@ -43078,17 +43118,6 @@ public class ChatActivity extends BaseFragment implements
+                     }
+                     super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.AT_MOST));
+                 }
+-
+-                Path path = new Path();
+-                @Override
+-                protected void dispatchDraw(Canvas canvas) {
+-                    canvas.save();
+-                    path.rewind();
+-                    path.addRoundRect(AndroidUtilities.dp(8), AndroidUtilities.dp(8), getWidth() - AndroidUtilities.dp(8), getHeight() - AndroidUtilities.dp(8), AndroidUtilities.dp(6), AndroidUtilities.dp(6), Path.Direction.CW);
+-                    canvas.clipPath(path);
+-                    super.dispatchDraw(canvas);
+-                    canvas.restore();
+-                }
+             };
+             scrimPopupContainerLayout.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+ 
+@@ -43106,11 +43135,13 @@ public class ChatActivity extends BaseFragment implements
+                 return;
+             }
+ 
+-            Rect backgroundPaddings = new Rect();
+-            Drawable shadowDrawable2 = ContextCompat.getDrawable(getParentActivity(), R.drawable.popup_fixed_alert4).mutate();
+-            shadowDrawable2.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_actionBarDefaultSubmenuBackground), PorterDuff.Mode.MULTIPLY));
+-            shadowDrawable2.getPadding(backgroundPaddings);
+-            scrimPopupContainerLayout.setBackground(shadowDrawable2);
++            scrimPopupContainerLayout.setClipToOutline(true);
++            scrimPopupContainerLayout.setOutlineProvider(ViewOutlineProviderImpl.boundsWithPaddingRoundRect(dp(8), dp(12)));
++            scrimPopupContainerLayout.setBackground(scrimBlur3Factory.create(scrimPopupContainerLayout, true)
++                .setColorProvider(BlurredBackgroundProviderImpl.scrimMenuBackground(resourceProvider))
++                .setRadius(dp(12))
++                .setPadding(dp(8))
++                .setHasPadding(true));
+ 
+             float bottom = reactionsLayoutInBubble.y + button.y + AndroidUtilities.dp(28);
+             float left = reactionsLayoutInBubble.x + button.x;
+@@ -43283,7 +43314,7 @@ public class ChatActivity extends BaseFragment implements
+             scrimViewTask = null;
+             scrimViewReaction = reaction.reaction.hashCode();
+             scrimViewReactionAnimated = reaction.reaction instanceof TLRPC.TL_reactionCustomEmoji && LiteMode.isEnabled(LiteMode.FLAG_ANIMATED_EMOJI_KEYBOARD);
+-            dimBehindView(cell, !tags, true);
++            dimBehindView(cell, true, true);
+             hideHints(false);
+             if (topUndoView != null) {
+                 topUndoView.hide(true, 1);
+@@ -44044,8 +44075,9 @@ public class ChatActivity extends BaseFragment implements
+     }
+ 
+     private void checkUi_botMenuPosition() {
+-        final float margin = windowInsetsStateHolder.getAnimatedMaxBottomInset() +
+-            (chatInputViewsContainer.getInputBubbleHeight() + dp(9 + 6));
++        final float margin = windowInsetsStateHolder.getAnimatedMaxBottomInset()
++            + getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)
++            + (chatInputViewsContainer.getInputBubbleHeight() + dp(9 + 6));
+ 
+         if (chatActivityEnterView != null && chatActivityEnterView.botCommandsMenuContainer != null) {
+             chatActivityEnterView.botCommandsMenuContainer.setTranslationY(-margin);
+@@ -44116,21 +44148,20 @@ public class ChatActivity extends BaseFragment implements
+ 
+     private static final Rect clipBoundsRect = new Rect();
+     private void checkUi_BlurHeight() {
+-        final float inputHeight = windowInsetsStateHolder.getAnimatedMaxBottomInset() +
+-                dp(9) + chatInputViewsContainer.getInputBubbleHeight() + dp(7);
+-        final float fullHeight = chatInputViewsContainer.getMeasuredHeight() + dp(36);
++        final float inputHeight = windowInsetsStateHolder.getAnimatedMaxBottomInset()
++            + dp(9) + chatInputViewsContainer.getInputBubbleHeight() + dp(7)
++            + getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM);
+ 
+-        final float result = lerp(inputHeight, fullHeight, animatorRoundMessageCameraVisibility.getFloatValue());
+-        chatInputViewsContainer.setBlurredBottomHeight(result);
++        chatInputViewsContainer.setBlurredBottomHeight(inputHeight);
+ 
+-        int clipBound = contentView.getMeasuredHeight() - (int) result + dp(36);
++        int clipBound = contentView.getMeasuredHeight() - (int) inputHeight + dp(36);
+         clipBound = androidx.core.math.MathUtils.clamp(clipBound, 0, contentView.getMeasuredHeight());
+ 
+         clipBoundsRect.set(0, 0, contentView.getMeasuredWidth(), clipBound);
+         clipBoundsRect.set(0,
+             blurredViewTopOffset,
+             chatListView.getMeasuredWidth(),
+-            chatListView.getMeasuredHeight() - blurredViewBottomOffset - (int) result + dp(36)
++            chatListView.getMeasuredHeight() - blurredViewBottomOffset - (int) inputHeight + dp(36)
+         );
+     }
+ 
+@@ -44155,7 +44186,7 @@ public class ChatActivity extends BaseFragment implements
+             fadeAlphaInv *= (1f - topPanelLayout.getMetadata().getTotalVisibility());
+         }
+         if (topicsTabs != null) {
+-            fadeHeight += dp(TopicsTabsView.TOP_TABS_HEIGHT + 7) * (1f - topicsTabs.sidemenuT);
++            fadeHeight += getTopicTabsSideSize(TopicsTabsView.Position.TOP);
+             fadeAlphaInv *= topicsTabs.sidemenuT;
+         }
+ 
+@@ -44171,7 +44202,11 @@ public class ChatActivity extends BaseFragment implements
+         if (id == ANIMATOR_ID_PULLING_DOWN_CONTAINER_VISIBILITY) {
+             onBottomItemsVisibilityChanged();
+         } else if (id == ANIMATOR_ID_ROUND_MESSAGE_CAMERA_VISIBILITY) {
+-            checkUi_BlurHeight();
++            if (roundVideoRecordBackground != null) {
++                roundVideoRecordBackground.setAlpha(factor);
++                roundVideoRecordBackground.setVisibility(factor > 0 ? View.VISIBLE : View.INVISIBLE);
++            }
++            // checkUi_BlurHeight();
+         }
+     }
+ 
+@@ -44179,7 +44214,7 @@ public class ChatActivity extends BaseFragment implements
+     private static final int ANIMATOR_ID_ROUND_MESSAGE_CAMERA_VISIBILITY = 1;
+ 
+     private final BoolAnimator animatorPullingDownContainerVisibility = new BoolAnimator(ANIMATOR_ID_PULLING_DOWN_CONTAINER_VISIBILITY, this, CubicBezierInterpolator.EASE_OUT_QUINT, 320);
+-    private final BoolAnimator animatorRoundMessageCameraVisibility = new BoolAnimator(ANIMATOR_ID_ROUND_MESSAGE_CAMERA_VISIBILITY, this, CubicBezierInterpolator.EASE_OUT_QUINT, 320);
++    private final BoolAnimator animatorRoundMessageCameraVisibility = new BoolAnimator(ANIMATOR_ID_ROUND_MESSAGE_CAMERA_VISIBILITY, this, CubicBezierInterpolator.EASE_OUT_QUINT, 520);
+ 
+     public static final int MESSAGE_INPUT_CONTAINER = 1;
+     public static final int BOTTOM_OVERLAY_TEXT_CONTAINER = 2;
+@@ -44432,6 +44467,10 @@ public class ChatActivity extends BaseFragment implements
+         } catch (Exception ignored) {};
+     }
+ 
++    private float getTopicTabsSideSize(TopicsTabsView.Position position) {
++        return topicsTabs != null ? topicsTabs.getTabsVisibleSpaceWithPadding(position, dp(7)) : 0;
++    }
++
+     private OnPostDrawView invalidateBlurredSourcesView;
+ 
+     private static final int BLUR_INVALIDATE_FLAG_SCROLL = 1;
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ChatRightsEditActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/ChatRightsEditActivity.java
+index 5dcaf8ebf..f469d9f04 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ChatRightsEditActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ChatRightsEditActivity.java
+@@ -324,9 +324,6 @@ public class ChatRightsEditActivity extends BaseFragment implements Notification
+             if (!defaultBannedRights.pin_messages) {
+                 adminRights.pin_messages = true;
+             }
+-            if (!defaultBannedRights.edit_rank) {
+-                adminRights.manage_ranks = true;
+-            }
+         } else if (type == TYPE_BANNED) {
+             defaultBannedRights = rightsBannedDefault;
+             if (defaultBannedRights == null) {
+@@ -1703,7 +1700,7 @@ public class ChatRightsEditActivity extends BaseFragment implements Notification
+                     } else if (position == pinMessagesRow) {
+                         return myAdminRights.pin_messages && (defaultBannedRights == null || defaultBannedRights.pin_messages);
+                     } else if (position == editTagsRow) {
+-                        return myAdminRights.manage_ranks && (defaultBannedRights == null || defaultBannedRights.edit_rank);
++                        return myAdminRights.manage_ranks;
+                     } else if (position == manageTopicsRow) {
+                         return myAdminRights.manage_topics;
+                     } else if (position == channelPostStoriesRow) {
+@@ -2069,7 +2066,7 @@ public class ChatRightsEditActivity extends BaseFragment implements Notification
+                         }
+                     } else if (position == editTagsRow) {
+                         if (currentType == TYPE_ADMIN || currentType == TYPE_ADD_BOT) {
+-                            checkCell.setTextAndCheck(LocaleController.getString(R.string.EditAdminEditTags), asAdminValue && adminRights.manage_ranks || !defaultBannedRights.edit_rank, true);
++                            checkCell.setTextAndCheck(LocaleController.getString(R.string.EditAdminEditTags), asAdminValue && adminRights.manage_ranks, true);
+                             if (currentType == TYPE_ADD_BOT) {
+                                 checkCell.setIcon(myAdminRights.manage_ranks || isCreator ? 0 : R.drawable.permission_locked);
+                             }
+@@ -2344,7 +2341,7 @@ public class ChatRightsEditActivity extends BaseFragment implements Notification
+                         childEnabled = myAdminRights.pin_messages && defaultBannedRights.pin_messages;
+                     } else if (childPosition == editTagsRow) {
+                         childValue = adminRights.manage_ranks;
+-                        childEnabled = myAdminRights.manage_ranks && defaultBannedRights.edit_rank;
++                        childEnabled = myAdminRights.manage_ranks;
+                     } else if (childPosition == startVoiceChatRow) {
+                         childValue = adminRights.manage_call;
+                         childEnabled = myAdminRights.manage_call;
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/BlurBehindDrawable.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/BlurBehindDrawable.java
+index 6f6686964..6345c634d 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/BlurBehindDrawable.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/BlurBehindDrawable.java
+@@ -45,7 +45,7 @@ public class BlurBehindDrawable {
+     private boolean error;
+     private boolean animateAlpha = true;
+ 
+-    private final float DOWN_SCALE = 6f;
++    private final float DOWN_SCALE = 15f;
+     private int lastH;
+     private int lastW;
+     private int toolbarH;
+@@ -199,7 +199,7 @@ public class BlurBehindDrawable {
+     }
+ 
+     private int getBlurRadius() {
+-        return Math.max(7, Math.max(lastH, lastW) / 180);
++        return 15; // Math.max(7, Math.max(lastH, lastW) / 180);
+     }
+ 
+     public void clear() {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java
+index b573e5f1e..98e232970 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java
+@@ -10616,6 +10616,10 @@ public class ChatActivityEnterView extends FrameLayout implements
+     }
+ 
+     public void setButtons(MessageObject messageObject, boolean openKeyboard) {
++        setButtons(messageObject, true, openKeyboard);
++    }
++
++    public void setButtons(MessageObject messageObject, boolean openBotKeyboard, boolean openKeyboard) {
+         if (replyingMessageObject != null && replyingMessageObject == botButtonsMessageObject && replyingMessageObject != messageObject) {
+             botMessageObject = messageObject;
+             return;
+@@ -10673,6 +10677,9 @@ public class ChatActivityEnterView extends FrameLayout implements
+                     showPopup = false;
+                 }
+             }
++            if (!openBotKeyboard) {
++                showPopup = false;
++            }
+             botKeyboardView.setButtons(botReplyMarkup);
+             if (showPopup && (messageEditText == null || messageEditText.length() == 0) && !isPopupShowing()) {
+                 showPopup(1, POPUP_CONTENT_BOT_KEYBOARD);
+@@ -11123,6 +11130,10 @@ public class ChatActivityEnterView extends FrameLayout implements
+ 
+             @Override
+             public void onGifSelectedForAddCaption(View view, Object gif, String query, Object parent, boolean notify, int scheduleDate, int scheduleRepeatPeriod) {
++                if (parentFragment == null) {
++                    return;
++                }
++
+                 PhotoViewer.getInstance().setParentActivity(parentFragment, parentFragment.themeDelegate);
+                 File file = null;
+                 if (gif instanceof TLRPC.Document) {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/EditTextBoldCursor.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/EditTextBoldCursor.java
+index f434b84b7..1da2e38e8 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/EditTextBoldCursor.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/EditTextBoldCursor.java
+@@ -70,6 +70,7 @@ import org.telegram.messenger.XiaomiUtilities;
+ import org.telegram.ui.ActionBar.FloatingActionMode;
+ import org.telegram.ui.ActionBar.FloatingToolbar;
+ import org.telegram.ui.ActionBar.Theme;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
+ 
+ import java.lang.reflect.Field;
+ import java.lang.reflect.Method;
+@@ -1143,6 +1144,12 @@ public class EditTextBoldCursor extends EditTextEffects {
+         AndroidUtilities.cancelRunOnUIThread(invalidateRunnable);
+     }
+ 
++    BlurredBackgroundDrawableViewFactory blurredBackgroundDrawableViewFactory;
++
++    public void setBlurredBackgroundDrawableViewFactory(BlurredBackgroundDrawableViewFactory factory) {
++        blurredBackgroundDrawableViewFactory = factory;
++    }
++
+     @Override
+     public ActionMode startActionMode(ActionMode.Callback callback) {
+         if (Build.VERSION.SDK_INT >= 23 && (windowView != null || attachedToWindow != null)) {
+@@ -1150,7 +1157,7 @@ public class EditTextBoldCursor extends EditTextEffects {
+                 floatingActionMode.finish();
+             }
+             cleanupFloatingActionModeViews();
+-            floatingToolbar = new FloatingToolbar(getContext(), windowView != null ? windowView : attachedToWindow, getActionModeStyle(), getResourcesProvider());
++            floatingToolbar = new FloatingToolbar(getContext(), windowView != null ? windowView : attachedToWindow, getActionModeStyle(), getResourcesProvider(), blurredBackgroundDrawableViewFactory);
+             floatingToolbar.setOnPremiumLockClick(onPremiumMenuLockClickListener);
+             floatingToolbar.setQuoteShowVisible(this::shouldShowQuoteButton);
+             floatingActionMode = new FloatingActionMode(getContext(), new ActionModeCallback2Wrapper(callback), this, floatingToolbar);
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/ItemOptions.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/ItemOptions.java
+index 83a5ec933..1c2b32c49 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/ItemOptions.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/ItemOptions.java
+@@ -66,6 +66,12 @@ import org.telegram.ui.ActionBar.Theme;
+ import org.telegram.ui.Cells.SharedPhotoVideoCell2;
+ import org.telegram.ui.Cells.TextCell;
+ import org.telegram.ui.Cells.UserCell;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
++import org.telegram.ui.Components.blur3.drawable.BlurredBackgroundDrawable;
++import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundProvider;
++import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
++import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceBitmap;
++import org.telegram.ui.Components.blur3.utils.Blur3Utils;
+ import org.telegram.ui.ContactsActivity;
+ import org.telegram.ui.DialogsActivity;
+ import org.telegram.ui.Gifts.GiftSheet;
+@@ -135,6 +141,7 @@ public class ItemOptions {
+     }
+ 
+     public ActionBarPopupWindow actionBarPopupWindow;
++    private BlurredBackgroundSourceBitmap scrimBlur3SourceBitmap;
+     private final float[] point = new float[2];
+ 
+     private Runnable dismissListener;
+@@ -144,9 +151,17 @@ public class ItemOptions {
+     private boolean drawScrim = true;
+ 
+     private boolean blur;
++    private boolean blurForMenu;
++
++    public ItemOptions setBlur(boolean blur, boolean blurForMenu) {
++        this.blur = blur;
++        this.blurForMenu = blurForMenu;
++        return this;
++    }
+ 
+     public ItemOptions setBlur(boolean b) {
+         this.blur = b;
++        this.blurForMenu = b;
+         return this;
+     }
+ 
+@@ -1027,6 +1042,17 @@ public class ItemOptions {
+         return layout;
+     }
+ 
++    public ItemOptions setBlurBackground(BlurredBackgroundDrawableViewFactory factory, BlurredBackgroundProvider colorProvider, boolean multiwindow) {
++        if (layout instanceof ActionBarPopupWindow.ActionBarPopupWindowLayout) {
++            layout.setBackground(factory.create(layout, multiwindow)
++                .setColorProvider(colorProvider)
++                .setPadding(dp(8))
++                .setHasPadding(true)
++                .setRadius(dp(12)));
++        }
++        return this;
++    }
++
+     public ItemOptions setBlurBackground(BlurringShader.BlurManager blurManager, float ox, float oy) {
+         Drawable baseDrawable = context.getResources().getDrawable(R.drawable.popup_fixed_alert2).mutate();
+         if (layout instanceof ActionBarPopupWindow.ActionBarPopupWindowLayout) {
+@@ -1149,6 +1175,10 @@ public class ItemOptions {
+             }
+         }
+ 
++        if (blur && scrimBlur3SourceBitmap == null) {
++            scrimBlur3SourceBitmap = new BlurredBackgroundSourceBitmap();
++        }
++
+         ViewGroup container = pointContainer = this.container == null ? fragment.getParentLayout().getOverlayContainerView() : this.container;
+ 
+         if (context == null || container == null) {
+@@ -1346,6 +1376,19 @@ public class ItemOptions {
+             container.dispatchTouchEvent(AndroidUtilities.emptyMotionEvent());
+         }
+ 
++        if (blurForMenu && scrimBlur3SourceBitmap != null) {
++            setGapBackgroundColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
++            BlurredBackgroundDrawable bg = new BlurredBackgroundDrawableViewFactory(scrimBlur3SourceBitmap)
++                .create(layout, true)
++                .setColorProvider(BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider))
++                .setPadding(dp(8))
++                .setHasPadding(true)
++                .setRadius(dp(12));
++
++            bg.setSourceOffset(X + this.translateX, Y + this.translateY);
++            layout.setBackground(bg);
++        }
++
+         actionBarPopupWindow.setScaleOut(scaleOut);
+         actionBarPopupWindow.showAtLocation(
+             container,
+@@ -1592,10 +1635,26 @@ public class ItemOptions {
+             if (blur) {
+                 blurPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                 scrimView.setAlpha(0.0f);
+-                AndroidUtilities.makeGlobalBlurBitmap(b -> {
++                ScrimOptions.makeGlobalBlurBitmaps((bitmapBg, bitmapOptions) -> {
+                     scrimView.setAlpha(1.0f);
+-                    blurBitmap = b;
+-                }, 12.0f);
++                    blurBitmap = bitmapBg;
++                    if (scrimBlur3SourceBitmap != null) {
++                        scrimBlur3SourceBitmap.setBitmap(bitmapOptions);
++                        Blur3Utils.checkBitmapSourceMatrixScale(scrimBlur3SourceBitmap, DimView.this);
++                        if (layout != null) {
++                            layout.invalidate();
++                        }
++                    }
++                });
++            }
++        }
++
++        @Override
++        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++            super.onSizeChanged(w, h, oldw, oldh);
++            Blur3Utils.checkBitmapSourceMatrixScale(scrimBlur3SourceBitmap, DimView.this);
++            if (layout != null) {
++                layout.invalidate();
+             }
+         }
+ 
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/MessagePreviewView.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/MessagePreviewView.java
+index 48cf75d7a..70c2b05d1 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/MessagePreviewView.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/MessagePreviewView.java
+@@ -8,7 +8,6 @@ import android.animation.AnimatorSet;
+ import android.animation.ObjectAnimator;
+ import android.animation.ValueAnimator;
+ import android.annotation.SuppressLint;
+-import android.annotation.TargetApi;
+ import android.content.Context;
+ import android.graphics.Canvas;
+ import android.graphics.ColorFilter;
+@@ -61,6 +60,8 @@ import org.telegram.ui.ActionBar.Theme;
+ import org.telegram.ui.Cells.ChatMessageCell;
+ import org.telegram.ui.Cells.TextSelectionHelper;
+ import org.telegram.ui.ChatActivity;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
++import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
+ 
+ import java.util.ArrayList;
+ 
+@@ -272,17 +273,14 @@ public class MessagePreviewView extends FrameLayout {
+             chatPreviewContainer.setBackgroundImage(resourcesProvider.getWallpaperDrawable(), resourcesProvider.isWallpaperMotion());
+             chatPreviewContainer.setOccupyStatusBar(false);
+ 
+-            if (Build.VERSION.SDK_INT >= 21) {
+-                chatPreviewContainer.setOutlineProvider(new ViewOutlineProvider() {
+-                    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+-                    @Override
+-                    public void getOutline(View view, Outline outline) {
+-                        outline.setRoundRect(0, (int) (currentTopOffset + 1), view.getMeasuredWidth(), view.getMeasuredHeight(), dp(8));
+-                    }
+-                });
+-                chatPreviewContainer.setClipToOutline(true);
+-                chatPreviewContainer.setElevation(dp(4));
+-            }
++            chatPreviewContainer.setOutlineProvider(new ViewOutlineProvider() {
++                @Override
++                public void getOutline(View view, Outline outline) {
++                    outline.setRoundRect(0, currentTopOffset + 1, view.getMeasuredWidth(), view.getMeasuredHeight(), dp(8));
++                }
++            });
++            chatPreviewContainer.setClipToOutline(true);
++            chatPreviewContainer.setElevation(dp(4));
+ 
+             actionBar = new MessagePreviewView.ActionBar(context, resourcesProvider);
+             actionBar.setBackgroundColor(getThemedColor(Theme.key_actionBarDefault));
+@@ -779,6 +777,12 @@ public class MessagePreviewView extends FrameLayout {
+             menu.getSwipeBack().setOnForegroundOpenFinished(() -> {
+                 switchToQuote(true, false);
+             });
++            menu.setBackground(iBlur3Factory.create(menu).setColorProvider(BlurredBackgroundProviderImpl
++                .scrimMenuBackground(resourcesProvider))
++                .setPadding(dp(8))
++                .setHasPadding(true)
++                .setRadius(dp(12)));
++
+             addView(menu, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+ 
+             if (tab == TAB_REPLY && messagePreviewParams.replyMessage != null) {
+@@ -798,6 +802,7 @@ public class MessagePreviewView extends FrameLayout {
+                         swipeback.addView(backButton, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48));
+ 
+                         ActionBarPopupWindow.GapView gap = new ActionBarPopupWindow.GapView(context, resourcesProvider);
++                        gap.setColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
+                         gap.setTag(R.id.fit_width_tag, 1);
+                         swipeback.addView(gap, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 8));
+ 
+@@ -921,6 +926,7 @@ public class MessagePreviewView extends FrameLayout {
+ 
+                 if (!messagePreviewParams.noforwards && !messagePreviewParams.hasSecretMessages) {
+                     ActionBarPopupWindow.GapView gap2 = new ActionBarPopupWindow.GapView(context, resourcesProvider);
++                    gap2.setColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
+                     gap2.setTag(R.id.fit_width_tag, 1);
+                     menu.addView(gap2, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 8));
+                 }
+@@ -975,6 +981,7 @@ public class MessagePreviewView extends FrameLayout {
+                 menu.addView(changeRecipientView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48));
+ 
+                 ActionBarPopupWindow.GapView gap = new ActionBarPopupWindow.GapView(context, resourcesProvider);
++                gap.setColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
+                 gap.setTag(R.id.fit_width_tag, 1);
+                 menu.addView(gap, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 8));
+ 
+@@ -1069,6 +1076,7 @@ public class MessagePreviewView extends FrameLayout {
+                 videoChangeSizeBtn.setState(messagePreviewParams.webpageSmall, false);
+ 
+                 ActionBarPopupWindow.GapView gap = new ActionBarPopupWindow.GapView(context, resourcesProvider);
++                gap.setColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
+                 gap.setTag(R.id.fit_width_tag, 1);
+                 menu.addView(gap, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 8));
+ 
+@@ -1139,10 +1147,8 @@ public class MessagePreviewView extends FrameLayout {
+ 
+ 
+             textSelectionOverlay = textSelectionHelper.getOverlayView(context);
+-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+-                textSelectionOverlay.setElevation(dp(8));
+-                textSelectionOverlay.setOutlineProvider(null);
+-            }
++            textSelectionOverlay.setElevation(dp(8));
++            textSelectionOverlay.setOutlineProvider(null);
+             if (textSelectionOverlay != null) {
+                 if (textSelectionOverlay.getParent() instanceof ViewGroup) {
+                     ((ViewGroup) textSelectionOverlay.getParent()).removeView(textSelectionOverlay);
+@@ -1466,16 +1472,12 @@ public class MessagePreviewView extends FrameLayout {
+         private void setOffset(float yOffset, int chatTopOffset) {
+             if (isLandscapeMode) {
+                 actionBar.setTranslationY(0);
+-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+-                    chatPreviewContainer.invalidateOutline();
+-                }
++                chatPreviewContainer.invalidateOutline();
+                 chatPreviewContainer.setTranslationY(0);
+                 menu.setTranslationY(0);
+             } else {
+                 actionBar.setTranslationY(chatTopOffset);
+-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+-                    chatPreviewContainer.invalidateOutline();
+-                }
++                chatPreviewContainer.invalidateOutline();
+                 chatPreviewContainer.setTranslationY(yOffset);
+                 menu.setTranslationY(yOffset + chatPreviewContainer.getMeasuredHeight() - dp(2));
+             }
+@@ -1723,13 +1725,15 @@ public class MessagePreviewView extends FrameLayout {
+ 
+     private final ArrayList<MessageObject.GroupedMessages> drawingGroups = new ArrayList<>(10);
+     private final ResourcesDelegate resourcesProvider;
++    private final BlurredBackgroundDrawableViewFactory iBlur3Factory;
+ 
+     @SuppressLint("ClickableViewAccessibility")
+-    public MessagePreviewView(@NonNull Context context, ChatActivity chatActivity, MessagePreviewParams params, TLRPC.User user, TLRPC.Chat chat, int currentAccount, ResourcesDelegate resourcesProvider, int startTab, boolean showOutdatedQuote)  {
++    public MessagePreviewView(@NonNull Context context, ChatActivity chatActivity, BlurredBackgroundDrawableViewFactory iBlur3Factory, MessagePreviewParams params, TLRPC.User user, TLRPC.Chat chat, int currentAccount, ResourcesDelegate resourcesProvider, int startTab, boolean showOutdatedQuote)  {
+         super(context);
+         this.showOutdatedQuote = showOutdatedQuote;
+         this.chatActivity = chatActivity;
+         this.currentAccount = currentAccount;
++        this.iBlur3Factory = iBlur3Factory;
+         currentUser = user;
+         currentChat = chat;
+         messagePreviewParams = params;
+@@ -1765,6 +1769,12 @@ public class MessagePreviewView extends FrameLayout {
+         };
+ 
+         tabsView = new TabsView(context, resourcesProvider);
++        tabsView.setBackground(iBlur3Factory.create(tabsView)
++            .setColorProvider(BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider))
++            .setHasPadding(true)
++            .setPadding(dp(8))
++            .setRadius(dp(16)));
++
+         int p = 0;
+         for (int i = 0; i < 3; ++i) {
+             if (i == TAB_REPLY && params.replyMessage != null) {
+@@ -1938,6 +1948,7 @@ public class MessagePreviewView extends FrameLayout {
+         private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+         private int color;
+         private int selectedColor;
++        private Drawable bgDrawable;
+ 
+         public TabsView(Context context, Theme.ResourcesProvider resourcesProvider) {
+             super(context);
+@@ -1987,16 +1998,16 @@ public class MessagePreviewView extends FrameLayout {
+             invalidate();
+         }
+ 
+-        private float tabInnerPadding = dp(12);
+-        private float marginBetween = dp(13);
++        private float tabInnerPadding = dp(14);
++        private float marginBetween = dp(0);
+         private RectF selectRect = new RectF();
+ 
+         @Override
+         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+             super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+ 
+-            tabInnerPadding = dp(12);
+-            marginBetween = dp(13);
++            tabInnerPadding = dp(14);
++            marginBetween = dp(0);
+             float W = 0;
+             for (int i = 0; i < tabs.size(); ++i) {
+                 if (i > 0) {
+@@ -2017,10 +2028,18 @@ public class MessagePreviewView extends FrameLayout {
+                 tabs.get(i).clickBounds.inset(-marginBetween / 2f, -top);
+                 x += w + marginBetween;
+             }
++            if (bgDrawable != null) {
++                bgDrawable.getPadding(AndroidUtilities.rectTmp2);
++                bgDrawable.setBounds(
++                    (int) ((fullWidth - W) / 2f) - dp(3) - AndroidUtilities.rectTmp2.left,
++                    fullHeight / 2 - dp(16) - AndroidUtilities.rectTmp2.top,
++                    (int) ((fullWidth + W) / 2f) + dp(3) + AndroidUtilities.rectTmp2.right,
++                    fullHeight / 2 + dp(16) + AndroidUtilities.rectTmp2.bottom);
++            }
+         }
+ 
+         @Override
+-        protected void dispatchDraw(Canvas canvas) {
++        protected void dispatchDraw(@NonNull Canvas canvas) {
+             if (tabs.size() <= 1) {
+                 return;
+             }
+@@ -2043,6 +2062,11 @@ public class MessagePreviewView extends FrameLayout {
+             } else if (higherInRange) {
+                 selectRect.set(tabs.get(higher).bounds);
+             }
++
++            if (bgDrawable != null) {
++                bgDrawable.draw(canvas);
++            }
++
+             if (lowerInRange || higherInRange) {
+                 canvas.drawRoundRect(selectRect, dp(13), dp(13), bgPaint);
+             }
+@@ -2053,6 +2077,11 @@ public class MessagePreviewView extends FrameLayout {
+             }
+         }
+ 
++        @Override
++        public void setBackground(Drawable background) {
++            bgDrawable = background;
++        }
++
+         private Utilities.Callback<Integer> onTabClick;
+         public void setOnTabClick(Utilities.Callback<Integer> onTabClick) {
+             this.onTabClick = onTabClick;
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileActionsView.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileActionsView.java
+index 1b528bda2..2d8ea2596 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileActionsView.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileActionsView.java
+@@ -21,13 +21,19 @@ import android.graphics.RenderNode;
+ import android.graphics.Shader;
+ import android.graphics.drawable.Drawable;
+ import android.os.Build;
++import android.os.Bundle;
+ import android.text.Layout;
+ import android.view.HapticFeedbackConstants;
+ import android.view.MotionEvent;
+ import android.view.View;
++import android.view.accessibility.AccessibilityEvent;
++import android.view.accessibility.AccessibilityManager;
++import android.view.accessibility.AccessibilityNodeInfo;
++import android.view.accessibility.AccessibilityNodeProvider;
+ 
+ import androidx.annotation.DrawableRes;
+ import androidx.annotation.NonNull;
++import androidx.annotation.Nullable;
+ import androidx.annotation.RawRes;
+ import androidx.annotation.StringRes;
+ import androidx.core.graphics.ColorUtils;
+@@ -39,6 +45,7 @@ import org.telegram.messenger.R;
+ import org.telegram.messenger.SharedConfig;
+ import org.telegram.messenger.Utilities;
+ import org.telegram.ui.ActionBar.Theme;
++import org.telegram.ui.Cells.ChatMessageCell;
+ import org.telegram.ui.ProfileActivity;
+ 
+ import java.util.ArrayList;
+@@ -132,6 +139,8 @@ public class ProfileActionsView extends View {
+         this.targetHeight = (int) (targetHeight - ypadding - top);
+ 
+         setBackgroundColor(0);
++
++        setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
+     }
+ 
+     public void drawingBlur(boolean drawing) {
+@@ -1234,4 +1243,114 @@ public class ProfileActionsView extends View {
+             this.outlineIcon = outlineIcon;
+         }
+     }
++
++    private AccessibilityNodeProvider accessibilityNodeProvider;
++    @Override
++    public AccessibilityNodeProvider getAccessibilityNodeProvider() {
++        if (accessibilityNodeProvider == null) {
++            accessibilityNodeProvider = new AccessibilityNodeProvider() {
++                @Override
++                public AccessibilityNodeInfo createAccessibilityNodeInfo(int virtualViewId) {
++                    int[] pos = {0, 0};
++                    getLocationOnScreen(pos);
++                    if (virtualViewId == HOST_VIEW_ID) {
++                        AccessibilityNodeInfo info = AccessibilityNodeInfo.obtain(ProfileActionsView.this);
++                        onInitializeAccessibilityNodeInfo(info);
++                        info.setEnabled(true);
++
++                        for (int i = 0; i < actions.size(); ++i) {
++                            info.addChild(ProfileActionsView.this, actions.get(i).key);
++                        }
++
++                        return info;
++                    } else {
++                        Action action = null;
++                        for (int i = 0; i < actions.size(); ++i) {
++                            if (actions.get(i).key == virtualViewId) {
++                                action = actions.get(i);
++                                break;
++                            }
++                        }
++                        if (action == null) return null;
++                        if (action.rect.isEmpty()) return null;
++
++                        AccessibilityNodeInfo info = AccessibilityNodeInfo.obtain();
++                        info.setSource(ProfileActionsView.this, virtualViewId);
++                        info.setParent(ProfileActionsView.this);
++                        info.setPackageName(getContext().getPackageName());
++
++                        info.addAction(AccessibilityNodeInfo.ACTION_CLICK);
++                        info.addAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
++                        info.setClickable(true);
++                        info.setFocusable(true);
++                        info.setEnabled(true);
++                        info.setVisibleToUser(true);
++                        info.setClassName(android.widget.Button.class.getName());
++
++                        info.setText(action.text.getText());
++
++                        Rect parentBounds = new Rect(
++                                (int) action.rect.left,
++                                (int) action.rect.top,
++                                (int) action.rect.right,
++                                (int) action.rect.bottom
++                        );
++                        info.setBoundsInParent(parentBounds);
++                        parentBounds.offset(pos[0], pos[1]);
++                        info.setBoundsInScreen(parentBounds);
++
++                        return info;
++                    }
++                }
++
++                @Override
++                public boolean performAction(int virtualViewId, int action, @Nullable Bundle arguments) {
++                    if (virtualViewId == HOST_VIEW_ID) {
++                        return performAccessibilityAction(action, arguments);
++                    }
++
++                    Action button = null;
++                    for (int i = 0; i < actions.size(); ++i) {
++                        if (actions.get(i).key == virtualViewId) {
++                            button = actions.get(i);
++                            break;
++                        }
++                    }
++                    if (button == null) return false;
++
++                    if (action == AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS) {
++                        sendAccessibilityEventForVirtualView(virtualViewId, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED);
++                        return true;
++                    } else if (action == AccessibilityNodeInfo.ACTION_CLICK) {
++                        if (onActionClickListener != null) {
++                            onActionClickListener.onClick(virtualViewId, 0, 0);
++                        }
++                        return true;
++                    }
++
++                    return false;
++                }
++
++                private void sendAccessibilityEventForVirtualView(int viewId, int eventType) {
++                    sendAccessibilityEventForVirtualView(viewId, eventType, null);
++                }
++
++                private void sendAccessibilityEventForVirtualView(int viewId, int eventType, String text) {
++                    AccessibilityManager am = (AccessibilityManager) getContext().getSystemService(Context.ACCESSIBILITY_SERVICE);
++                    if (am.isTouchExplorationEnabled()) {
++                        AccessibilityEvent event = AccessibilityEvent.obtain(eventType);
++                        event.setPackageName(getContext().getPackageName());
++                        event.setSource(ProfileActionsView.this, viewId);
++                        if (text != null) {
++                            event.getText().add(text);
++                        }
++                        if (getParent() != null) {
++                            getParent().requestSendAccessibilityEvent(ProfileActionsView.this, event);
++                        }
++                    }
++                }
++            };
++        }
++        return accessibilityNodeProvider;
++    }
+ }
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileMusicView.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileMusicView.java
+index 096f2ede9..87bce3ae6 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileMusicView.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileMusicView.java
+@@ -190,6 +190,8 @@ public class ProfileMusicView extends View {
+     public void setText(CharSequence author, CharSequence title) {
+         this.author = new Text(author, 11, AndroidUtilities.bold());
+         this.title = new Text(title, 11);
++
++        setContentDescription(getString(R.string.AccDescrProfileMusic) + " " + author + " — " + title);
+     }
+ 
+     private ProfileActivity.AvatarImageView avatarView;
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/ReactedUsersListView.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/ReactedUsersListView.java
+index 2b032635e..f4263dc8a 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/ReactedUsersListView.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/ReactedUsersListView.java
+@@ -117,7 +117,7 @@ public class ReactedUsersListView extends FrameLayout {
+ 
+                         FrameLayout frameLayout = new FrameLayout(context);
+                         View gap = new View(context);
+-                        gap.setBackgroundColor(Theme.getColor(Theme.key_actionBarDefaultSubmenuSeparator, resourcesProvider));
++                        gap.setBackgroundColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
+                         frameLayout.addView(gap, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 8));
+                         frameLayout.addView(messageContainsEmojiButton, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, 0, 0, 8, 0, 0));
+ 
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/ScrimOptions.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/ScrimOptions.java
+index 111c743d0..83623a8a3 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/ScrimOptions.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/ScrimOptions.java
+@@ -14,7 +14,6 @@ import android.graphics.ColorFilter;
+ import android.graphics.ColorMatrix;
+ import android.graphics.ColorMatrixColorFilter;
+ import android.graphics.CornerPathEffect;
+-import android.graphics.Insets;
+ import android.graphics.Matrix;
+ import android.graphics.Paint;
+ import android.graphics.PixelFormat;
+@@ -26,7 +25,6 @@ import android.graphics.Shader;
+ import android.graphics.drawable.Drawable;
+ import android.os.Build;
+ import android.os.Bundle;
+-import android.text.Layout;
+ import android.text.Spannable;
+ import android.text.SpannableStringBuilder;
+ import android.text.Spanned;
+@@ -39,21 +37,28 @@ import android.view.KeyEvent;
+ import android.view.View;
+ import android.view.ViewGroup;
+ import android.view.Window;
+-import android.view.WindowInsets;
+ import android.view.WindowManager;
+ import android.widget.FrameLayout;
+ 
+ import androidx.annotation.NonNull;
+ import androidx.annotation.Nullable;
++import androidx.core.graphics.Insets;
++import androidx.core.view.OnApplyWindowInsetsListener;
++import androidx.core.view.ViewCompat;
+ import androidx.core.view.WindowInsetsCompat;
+ 
+ import org.telegram.messenger.AndroidUtilities;
+ import org.telegram.messenger.MessageObject;
+ import org.telegram.messenger.R;
+ import org.telegram.messenger.UserConfig;
++import org.telegram.messenger.Utilities;
+ import org.telegram.ui.ActionBar.Theme;
+ import org.telegram.ui.Cells.ChatMessageCell;
+-import org.telegram.ui.ChatActivity;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
++import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
++import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceBitmap;
++import org.telegram.ui.Components.blur3.utils.Blur3Utils;
++import org.telegram.ui.Components.chat.ViewPositionWatcher;
+ 
+ import java.util.ArrayList;
+ 
+@@ -62,12 +67,14 @@ public class ScrimOptions extends Dialog {
+     public final Theme.ResourcesProvider resourcesProvider;
+     public final int currentAccount = UserConfig.selectedAccount;
+ 
+-    private final android.graphics.Rect insets = new Rect();
+     private Bitmap blurBitmap;
+     private BitmapShader blurBitmapShader;
+     private Paint blurBitmapPaint;
+     private Matrix blurMatrix;
+ 
++    private final BlurredBackgroundSourceBitmap iBlur3SourceBitmap;
++    private final BlurredBackgroundDrawableViewFactory iBlur3Factory;
++
+     private float openProgress;
+ 
+     private final FrameLayout windowView;
+@@ -131,6 +138,12 @@ public class ScrimOptions extends Dialog {
+                 super.onLayout(changed, left, top, right, bottom);
+                 ScrimOptions.this.layout();
+             }
++
++            @Override
++            protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++                super.onSizeChanged(w, h, oldw, oldh);
++                checkBitmapMatrix();
++            }
+         };
+         windowView.setOnClickListener(v -> onBackPressed());
+ 
+@@ -138,32 +151,26 @@ public class ScrimOptions extends Dialog {
+         containerView.setClipToPadding(false);
+         windowView.addView(containerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.FILL));
+ 
+-        if (Build.VERSION.SDK_INT >= 21) {
+-            windowView.setFitsSystemWindows(true);
+-            windowView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+-                @NonNull
+-                @Override
+-                public WindowInsets onApplyWindowInsets(@NonNull View v, @NonNull WindowInsets insets) {
+-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+-                        Insets r = insets.getInsets(WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.systemBars());
+-                        ScrimOptions.this.insets.set(r.left, r.top, r.right, r.bottom);
+-                    } else {
+-                        ScrimOptions.this.insets.set(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+-                    }
+-                    containerView.setPadding(ScrimOptions.this.insets.left, ScrimOptions.this.insets.top, ScrimOptions.this.insets.right, ScrimOptions.this.insets.bottom);
+-                    windowView.requestLayout();
+-                    if (Build.VERSION.SDK_INT >= 30) {
+-                        return WindowInsets.CONSUMED;
+-                    } else {
+-                        return insets.consumeSystemWindowInsets();
+-                    }
+-                }
+-            });
+-        }
++        iBlur3SourceBitmap = new BlurredBackgroundSourceBitmap();
++        iBlur3Factory = new BlurredBackgroundDrawableViewFactory(iBlur3SourceBitmap);
++        iBlur3Factory.setSourceRootView(new ViewPositionWatcher(windowView), windowView);
++
++        ViewCompat.setOnApplyWindowInsetsListener(windowView, new OnApplyWindowInsetsListener() {
++            @Override
++            public @NonNull WindowInsetsCompat onApplyWindowInsets(@NonNull View v, @NonNull WindowInsetsCompat insets) {
++                final Insets r = insets.getInsets(WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.systemBars());
++                containerView.setPadding(r.left, r.top, r.right, r.bottom);
++                windowView.requestLayout();
++
++                return WindowInsetsCompat.CONSUMED;
++            }
++        });
+     }
+ 
+     public void setItemOptions(ItemOptions options) {
+-        this.options = options;
++        this.options = options
++            .setGapBackgroundColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f))
++            .setBlurBackground(iBlur3Factory, BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider), false);
+         optionsView = options.getLayout();
+         optionsContainer = new FrameLayout(context);
+         optionsContainer.addView(optionsView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+@@ -283,16 +290,15 @@ public class ScrimOptions extends Dialog {
+         params.dimAmount = 0;
+         params.flags &= ~WindowManager.LayoutParams.FLAG_DIM_BEHIND;
+         params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+-        params.flags |= WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
+-        if (Build.VERSION.SDK_INT >= 21) {
+-            params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+-                    WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
+-                    WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS |
+-                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION |
+-                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS;
+-        }
+-        params.flags |= WindowManager.LayoutParams.FLAG_FULLSCREEN;
+-        params.flags |= WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
++        params.flags |= WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
++            | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
++            | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR
++            | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
++            | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
++            | WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
++            | WindowManager.LayoutParams.FLAG_FULLSCREEN
++            | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
++
+         if (Build.VERSION.SDK_INT >= 28) {
+             params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+         }
+@@ -306,20 +312,46 @@ public class ScrimOptions extends Dialog {
+         if (withoutView != null) {
+             withoutView.setVisibility(View.INVISIBLE);
+         }
+-        AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
++
++        makeGlobalBlurBitmaps((bitmapBg, bitmapOptions) -> {
+             if (withoutView != null) {
+                 withoutView.setVisibility(View.VISIBLE);
+             }
+-            blurBitmap = bitmap;
++            blurBitmap = bitmapBg;
+ 
+             blurBitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+             blurBitmapPaint.setShader(blurBitmapShader = new BitmapShader(blurBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+-            ColorMatrix colorMatrix = new ColorMatrix();
+-            AndroidUtilities.adjustSaturationColorMatrix(colorMatrix, Theme.isCurrentThemeDark() ? .08f : +.25f);
+-            AndroidUtilities.adjustBrightnessColorMatrix(colorMatrix, Theme.isCurrentThemeDark() ? -.02f : -.07f);
+-            blurBitmapPaint.setColorFilter(new ColorMatrixColorFilter(colorMatrix));
+             blurMatrix = new Matrix();
+-        }, 14);
++
++            iBlur3SourceBitmap.setBitmap(bitmapOptions);
++            checkBitmapMatrix();
++        });
++    }
++
++    public static void makeGlobalBlurBitmaps(Utilities.Callback2<Bitmap, Bitmap> bitmaps) {
++        AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
++            final ColorMatrix colorMatrixBg = new ColorMatrix();
++            AndroidUtilities.adjustSaturationColorMatrix(colorMatrixBg, Theme.isCurrentThemeDark() ? .04f : +.25f);
++            AndroidUtilities.adjustBrightnessColorMatrix(colorMatrixBg, Theme.isCurrentThemeDark() ? -.04f : -.07f);
++            final Bitmap bitmapBg = AndroidUtilities.applyColorMatrix(bitmap, colorMatrixBg);
++            bitmapBg.setHasAlpha(false);
++
++            final ColorMatrix colorMatrixOptions = new ColorMatrix();
++            colorMatrixOptions.setSaturation(Theme.isCurrentThemeDark() ? 2 : 3);
++            AndroidUtilities.adjustBrightnessColorMatrix(colorMatrixOptions, Theme.isCurrentThemeDark() ? -.2f : -.07f);
++            final Bitmap bitmapOptions = AndroidUtilities.applyColorMatrix(bitmap, colorMatrixOptions);
++            bitmapOptions.setHasAlpha(false);
++
++            bitmap.recycle();
++            bitmaps.run(bitmapBg, bitmapOptions);
++        }, 15);
++    }
++
++    private void checkBitmapMatrix() {
++        Blur3Utils.checkBitmapSourceMatrixScale(iBlur3SourceBitmap, windowView);
++        if (optionsView != null) {
++            optionsView.invalidate();
++        }
+     }
+ 
+     public void layout() {
+@@ -582,6 +614,7 @@ public class ScrimOptions extends Dialog {
+                 if (cell != null && cell.drawBackgroundInParent()) {
+                     if (cell.currentBackgroundDrawable != null && cell.currentBackgroundDrawable.getPaint() != null) {
+                         canvas.save();
++                        cell.setBackgroundTopY(true);
+                         canvas.translate(0, -cell.currentBackgroundDrawable.getTopY());
+                         canvas.drawPaint(cell.currentBackgroundDrawable.getPaint());
+                         canvas.restore();
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/StarRatingView.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/StarRatingView.java
+index 95df4bd92..e9e55750a 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/StarRatingView.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/StarRatingView.java
+@@ -1,6 +1,7 @@
+ package org.telegram.ui.Components;
+ 
+ import static org.telegram.messenger.AndroidUtilities.dp;
++import static org.telegram.messenger.LocaleController.getString;
+ 
+ import android.content.Context;
+ import android.graphics.Canvas;
+@@ -13,6 +14,7 @@ import androidx.core.graphics.ColorUtils;
+ 
+ import org.telegram.messenger.AndroidUtilities;
+ import org.telegram.messenger.MessagesController;
++import org.telegram.messenger.R;
+ import org.telegram.tgnet.tl.TL_stars;
+ import org.telegram.ui.ActionBar.Theme;
+ 
+@@ -60,6 +62,7 @@ public class StarRatingView extends View {
+         }
+ 
+         drawable.setBadgeLevel(starsRating.level, true);
++        setContentDescription(getString(R.string.AccDescrProfileRatingLevel) + " " + starsRating.level);
+         invalidate();
+     }
+ 
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/TopicsTabsView.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/TopicsTabsView.java
+index 381084641..6aaac8da5 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/TopicsTabsView.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/TopicsTabsView.java
+@@ -9,8 +9,10 @@ import static org.telegram.messenger.LocaleController.getString;
+ import android.animation.Animator;
+ import android.animation.AnimatorListenerAdapter;
+ import android.animation.ValueAnimator;
++import android.annotation.SuppressLint;
+ import android.content.Context;
+ import android.content.DialogInterface;
++import android.content.SharedPreferences;
+ import android.graphics.Canvas;
+ import android.graphics.ColorFilter;
+ import android.graphics.Paint;
+@@ -72,8 +74,10 @@ import java.util.HashSet;
+ import me.vkryl.android.animator.BoolAnimator;
+ import me.vkryl.core.BitwiseUtils;
+ 
++@SuppressLint("ViewConstructor")
+ public class TopicsTabsView extends FrameLayout implements NotificationCenter.NotificationCenterDelegate {
+     public static final int TOP_TABS_HEIGHT = 36;
++    public static final int SIDE_TABS_WIDTH = 64;
+ 
+     private final int currentAccount;
+     private final long dialogId;
+@@ -121,14 +125,17 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+ 
+         topTabs = new UniversalRecyclerView(context, currentAccount, 0, this::fillHorizontalTabs, this::onTabClick, this::onTabLongClick, resourcesProvider) {
+             private final GradientClip clip = new GradientClip();
+-            private final AnimatedFloat animatedClip = new AnimatedFloat(this, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
++            private final AnimatedFloat animatedClipL = new AnimatedFloat(this, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
++            private final AnimatedFloat animatedClipR = new AnimatedFloat(this, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
+             private final RectF lineRect = new RectF();
+             private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+             private final AnimatedFloat animateTab = new AnimatedFloat(this, 420, CubicBezierInterpolator.EASE_OUT_QUINT);
+             @Override
+             protected void dispatchDraw(Canvas canvas) {
+-                final float clipAlpha = animatedClip.set(canScrollHorizontally(-1));
+-                if (clipAlpha > 0) {
++                final float clipAlphaL = animatedClipL.set(canScrollHorizontally(-1));
++                final float clipAlphaR = animatedClipR.set(canScrollHorizontally(1));
++                final boolean needClip = clipAlphaL > 0 || clipAlphaR > 0;
++                if (needClip) {
+                     canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), 0xFF, Canvas.ALL_SAVE_FLAG);
+                 }
+                 drawPinnedBackground(canvas);
+@@ -171,10 +178,16 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+                     linePaint.setColor(ColorUtils.setAlphaComponent(Theme.getColor(Theme.key_featuredStickers_addButton, resourcesProvider), 31));
+                     canvas.drawRoundRect(lineRect, dp(14), dp(14), linePaint);
+                 }
+-                if (clipAlpha > 0) {
++                if (needClip) {
+                     canvas.save();
+-                    AndroidUtilities.rectTmp.set(0, 0, dp(12), getHeight());
+-                    clip.draw(canvas, AndroidUtilities.rectTmp, GradientClip.LEFT, clipAlpha);
++                    if (clipAlphaL > 0) {
++                        AndroidUtilities.rectTmp.set(0, 0, dp(12), getHeight());
++                        clip.draw(canvas, AndroidUtilities.rectTmp, GradientClip.LEFT, clipAlphaL);
++                    }
++                    if (clipAlphaR > 0) {
++                        AndroidUtilities.rectTmp.set(getWidth() - dp(12), 0, getWidth(), getHeight());
++                        clip.draw(canvas, AndroidUtilities.rectTmp, GradientClip.RIGHT, clipAlphaR);
++                    }
+                     canvas.restore();
+                     canvas.restore();
+                 }
+@@ -330,8 +343,8 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+             }
+         });
+ 
+-        toggleButtonTop = createButton(context, R.drawable.menu_sidebar, this::onSideMenuButtonClick);
+-        toggleButtonSide = createButton(context, R.drawable.menu_sidebar, this::onSideMenuButtonClick);
++        toggleButtonTop = createButton(context, R.drawable.menu_sidebar_left, this::onSideMenuButtonClick);
++        toggleButtonSide = createButton(context, R.drawable.menu_sidebar_left, this::onSideMenuButtonClick);
+         topTabsContainer.addView(toggleButtonTop, LayoutHelper.createFrame(44, TOP_TABS_HEIGHT, Gravity.LEFT | Gravity.TOP));
+         sideTabsContainer.addView(toggleButtonSide, LayoutHelper.createFrame(64, 48, Gravity.LEFT | Gravity.TOP));
+ 
+@@ -342,10 +355,13 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+ 
+         MessagesController.getInstance(currentAccount).getTopicsController().loadTopics(-dialogId, false, TopicsController.LOAD_TYPE_HASH_CHECK);
+ 
+-        if (MessagesController.getInstance(currentAccount).getMainSettings().getBoolean("topicssidetabs" + dialogId, false)) {
++        SharedPreferences sp = MessagesController.getInstance(currentAccount).getMainSettings();
++        if (sp.getBoolean("topicssidetabs" + dialogId, false)) {
+             sidemenuT = 1.0f;
+             sidemenuEnabled = true;
+         }
++        topicBottom = sp.getBoolean("topicssidetabsb" + dialogId, false);
++        toggleButtonSide.setImageResource(topicBottom ? R.drawable.menu_sidebar_top : R.drawable.menu_sidebar_bottom);
+ 
+         checkUi_closeButtonVisibility();
+         updateSidemenuPosition();
+@@ -465,6 +481,7 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+ 
+     public void setSideMenuBackgroundMarginBottom(float margin) {
+         sideMenuBackgroundMarginBottom = margin;
++        checkUi_topicsVerticalPosition();
+         checkSideTabsPadding(true);
+         invalidate();
+     }
+@@ -472,6 +489,7 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+     public void setSideMenuBackgroundMarginTop(float margin) {
+         sideMenuBackgroundMarginTop = margin;
+         sideTabsContainer.setTranslationY(margin);
++        checkUi_topicsVerticalPosition();
+         checkSideTabsPadding(true);
+         invalidate();
+     }
+@@ -501,13 +519,22 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+     }
+     */
+ 
++    private Runnable onUpdateSideMenuPosition;
++
++    public void doOnUpdateSideMenuPosition(Runnable runnable) {
++        onUpdateSideMenuPosition = runnable;
++    }
++
++    private boolean topicBottom;
+     public boolean sidemenuEnabled;
+     public float sidemenuT = 0.0f;
+     public boolean sidemenuAnimating;
+     public void updateSidemenuPosition() {
+-        topTabsContainer.setTranslationY(-dp(TOP_TABS_HEIGHT + 7) * sidemenuT);
+-        topTabsContainer.setAlpha(lerp(1.0f, 0.85f, sidemenuT));
+-        topTabsContainer.setVisibility(sidemenuT >= 1.0f ? View.GONE : View.VISIBLE);
++        if (onUpdateSideMenuPosition != null) {
++            onUpdateSideMenuPosition.run();
++        }
++
++        checkUi_topicsVerticalPosition();
+ 
+         sideTabsContainer.setTranslationX(-dp(64 + 7 + 7) * (1.0f - sidemenuT));
+         sideTabsContainer.setVisibility(sidemenuT <= 0.0f ? View.GONE : View.VISIBLE);
+@@ -540,6 +567,16 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+         invalidate();
+     }
+ 
++    private void checkUi_topicsVerticalPosition() {
++        topTabsContainer.setAlpha(lerp(1.0f, 0.85f, sidemenuT));
++        topTabsContainer.setVisibility(sidemenuT >= 1.0f ? View.GONE : View.VISIBLE);
++        if (topicBottom) {
++            topTabsContainer.setTranslationY(getMeasuredHeight() - dp(TOP_TABS_HEIGHT + 7 + 7) - sideMenuBackgroundMarginBottom + dp(TOP_TABS_HEIGHT + 7) * sidemenuT);
++        } else {
++            topTabsContainer.setTranslationY(-dp(TOP_TABS_HEIGHT + 7) * sidemenuT);
++        }
++    }
++
+     private Boolean pendingSidemenu;
+     private ValueAnimator animator;
+     private void animateSidemenuTo(boolean side) {
+@@ -551,6 +588,11 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+                 return;
+             }
+         }
++
++        if (!side) {
++            topicBottom = !topicBottom;
++        }
++
+         sidemenuEnabled = side;
+         sidemenuAnimating = true;
+         animator = ValueAnimator.ofFloat(sidemenuT, side ? 1.0f : 0.0f);
+@@ -565,8 +607,12 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+                     sidemenuT = side ? 1.0f : 0.0f;
+                     updateSidemenuPosition();
+                     sidemenuAnimating = false;
++                    toggleButtonSide.setImageResource(topicBottom ? R.drawable.menu_sidebar_top : R.drawable.menu_sidebar_bottom);
+                     animator = null;
+-                    MessagesController.getInstance(currentAccount).getMainSettings().edit().putBoolean("topicssidetabs" + dialogId, sidemenuEnabled).apply();
++                    MessagesController.getInstance(currentAccount).getMainSettings().edit()
++                        .putBoolean("topicssidetabs" + dialogId, sidemenuEnabled)
++                        .putBoolean("topicssidetabsb" + dialogId, topicBottom)
++                        .apply();
+                     if (pendingSidemenu != null && side != pendingSidemenu) {
+                         final boolean newValue = pendingSidemenu;
+                         pendingSidemenu = null;
+@@ -1974,6 +2020,13 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+         }
+     }
+ 
++    @Override
++    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++        super.onSizeChanged(w, h, oldw, oldh);
++        checkUi_topicsVerticalPosition();
++    }
++
++
+     private final HashSet<Integer> excludeTopics = new HashSet<>();
+     private void deleteTopics(HashSet<Integer> selectedTopics, Runnable runnable) {
+         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+@@ -2058,4 +2111,35 @@ public class TopicsTabsView extends FrameLayout implements NotificationCenter.No
+             return PixelFormat.UNKNOWN;
+         }
+     }
++
++
++
++
++    public enum Position {
++        TOP, LEFT, BOTTOM
++    }
++
++    private static int getTabsSize(Position position) {
++        return dp(position == Position.LEFT ? SIDE_TABS_WIDTH : TOP_TABS_HEIGHT);
++    }
++
++    private float getTabsVisibility(Position position) {
++        if (position == Position.LEFT) {
++            return sidemenuT;
++        }
++        if (position == Position.TOP && !topicBottom || position == Position.BOTTOM && topicBottom) {
++            return (1.0f - sidemenuT);
++        }
++        return 0;
++    }
++
++    public Position getCurrentTabsPosition() {
++        return sidemenuEnabled ? Position.LEFT : (topicBottom ? Position.BOTTOM : Position.TOP);
++    }
++
++    public float getTabsVisibleSpaceWithPadding(Position position, float padding) {
++        final float visibility = getTabsVisibility(position);
++        final int size = getTabsSize(position);
++        return (size + padding) * visibility;
++    }
+ }
+\ No newline at end of file
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/BlurredBackgroundDrawableViewFactory.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/BlurredBackgroundDrawableViewFactory.java
+index 8fe9e7bef..67c65882a 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/BlurredBackgroundDrawableViewFactory.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/BlurredBackgroundDrawableViewFactory.java
+@@ -40,6 +40,15 @@ public class BlurredBackgroundDrawableViewFactory {
+         this.linkedViews = linkedViews;
+     }
+ 
++    public void invalidateAllLinkedViews() {
++        if (linkedViews != null) {
++            for (View v : linkedViews) {
++                v.invalidate();
++            }
++        }
++    }
++
++
+     private boolean isLiquidGlassEffectAllowed;
+ 
+     public void setLiquidGlassEffectAllowed(boolean liquidGlassEffectAllowed) {
+@@ -54,7 +63,15 @@ public class BlurredBackgroundDrawableViewFactory {
+         return create(view, null);
+     }
+ 
++    public BlurredBackgroundDrawable create(View view, boolean multiwindow) {
++        return create(view, null, multiwindow);
++    }
++
+     public BlurredBackgroundDrawable create(View view, BlurredBackgroundColorProvider provider) {
++        return create(view, provider, false);
++    }
++
++    public BlurredBackgroundDrawable create(View view, BlurredBackgroundColorProvider provider, boolean multiwindow) {
+         final BlurredBackgroundDrawable drawable = source.createDrawable();
+         if (isLiquidGlassEffectAllowed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+             if (drawable instanceof BlurredBackgroundDrawableRenderNode) {
+@@ -72,7 +89,7 @@ public class BlurredBackgroundDrawableViewFactory {
+             viewPositionWatcher.subscribe(view, parent, (v, pos) -> {
+                 drawable.setSourceOffset(pos.left, pos.top);
+                 view.invalidate();
+-            });
++            }, multiwindow);
+         }
+ 
+         return drawable;
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/drawable/BlurredBackgroundDrawable.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/drawable/BlurredBackgroundDrawable.java
+index 40ac00c3c..cd5c695c8 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/drawable/BlurredBackgroundDrawable.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/drawable/BlurredBackgroundDrawable.java
+@@ -28,9 +28,6 @@ import androidx.annotation.RequiresApi;
+ import androidx.core.graphics.ColorUtils;
+ import androidx.core.math.MathUtils;
+ 
+-import com.google.common.collect.MapMaker;
+-
+-import org.telegram.messenger.BuildConfig;
+ import org.telegram.ui.ActionBar.Theme;
+ import org.telegram.ui.Components.blur3.Blur3HashImpl;
+ import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundColorProvider;
+@@ -44,7 +41,6 @@ import org.telegram.ui.Components.blur3.utils.NinePatchBuilder;
+ 
+ import java.lang.ref.WeakReference;
+ import java.util.Arrays;
+-import java.util.Map;
+ 
+ public abstract class BlurredBackgroundDrawable extends Drawable {
+     public BlurredBackgroundDrawable() {
+@@ -89,6 +85,17 @@ public abstract class BlurredBackgroundDrawable extends Drawable {
+         return this;
+     }
+ 
++    public BlurredBackgroundDrawable setHasPadding(boolean hasPadding) {
++        boundProps.hasPadding = hasPadding;
++        return this;
++    }
++
++    @Override
++    public boolean getPadding(@NonNull Rect padding) {
++        padding.set(boundProps.padding, boundProps.padding, boundProps.padding, boundProps.padding);
++        return boundProps.hasPadding;
++    }
++
+     public BlurredBackgroundDrawable setRadius(float radius) {
+         Arrays.fill(boundProps.radii, radius);
+         Arrays.fill(boundProps.shaderRadii, radius);
+@@ -210,6 +217,7 @@ public abstract class BlurredBackgroundDrawable extends Drawable {
+         public final float[] radii = new float[8];
+         public final float[] shaderRadii = new float[8];
+         public int padding;
++        public boolean hasPadding;
+         public int liquidThickness;
+         public float liquidIntensity = 0.75f;
+         public float liquidIndex = 1.5f;
+@@ -319,6 +327,11 @@ public abstract class BlurredBackgroundDrawable extends Drawable {
+         return viewOutlineProvider;
+     }
+ 
++    @Override
++    public void getOutline(@NonNull Outline outline) {
++        BlurredBackgroundDrawable.getOutline(outline, boundProps.boundsWithPadding, boundProps.radii);
++    }
++
+     private static Path tmpPath = new Path();
+     protected static void getOutline(Outline outline, Rect rect, float[] radii) {
+         final boolean radiiAreSame = radiiAreSame(radii);
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/drawable/color/impl/BlurredBackgroundProviderImpl.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/drawable/color/impl/BlurredBackgroundProviderImpl.java
+index 001b5c55f..5ff394e46 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/drawable/color/impl/BlurredBackgroundProviderImpl.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/drawable/color/impl/BlurredBackgroundProviderImpl.java
+@@ -48,6 +48,18 @@ public class BlurredBackgroundProviderImpl {
+             .build();
+     }
+ 
++    public static BlurredBackgroundProvider scrimMenuBackground(Theme.ResourcesProvider resourcesProvider) {
++        return new BlurredBackgroundProviderBuilder(resourcesProvider)
++            .setBackgroundColor((r, isDark) ->
++                Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuBackground), isDark ? 0.85f : 0.76f))
++            .setStrokeColorTop(0xFFFFFFFF, 0x20FFFFFF)
++            .setStrokeColorBottom(0xFFFFFFFF, 0x20FFFFFF)
++            .setShadowColor(0x26000000, 0)
++            .setShadowLayer(dpf2(4f), 0, 0)
++            .setStrokeWidth(dpf2(2 / 3f), dpf2(2 / 3f))
++            .build();
++    }
++
+     public static BlurredBackgroundProvider attachMenuSearch(Theme.ResourcesProvider resourcesProvider) {
+         return new BlurredBackgroundProviderBuilder(resourcesProvider)
+                 .setBackgroundColor((r, isDark) -> {
+@@ -127,6 +139,15 @@ public class BlurredBackgroundProviderImpl {
+                 .build();
+     }
+ 
++    public static BlurredBackgroundProvider photoViewerMenu(Theme.ResourcesProvider resourcesProvider) {
++        return new BlurredBackgroundProviderBuilder(resourcesProvider)
++                .setBackgroundColor((r, isDark) -> 0x40000000)
++                .setStrokeColorTop(0x28FFFFFF, 0x28FFFFFF)
++                .setStrokeColorBottom(0x14FFFFFF, 0x14FFFFFF)
++                .setStrokeWidth(dpf2(2 / 3f), dpf2(2 / 3f))
++                .build();
++    }
++
+     public static BlurredBackgroundProvider premiumButton(Theme.ResourcesProvider resourcesProvider) {
+         return new BlurredBackgroundProviderBuilder(resourcesProvider)
+             .setBackgroundColor((r, isDark) ->
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/utils/Blur3Utils.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/utils/Blur3Utils.java
+index db3c6842c..5f0d4803d 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/utils/Blur3Utils.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/blur3/utils/Blur3Utils.java
+@@ -1,11 +1,15 @@
+ package org.telegram.ui.Components.blur3.utils;
+ 
++import android.graphics.Bitmap;
+ import android.graphics.Canvas;
++import android.graphics.Matrix;
+ import android.graphics.RectF;
+ import android.view.View;
+ import android.view.ViewGroup;
+ 
++import org.jspecify.annotations.Nullable;
+ import org.telegram.ui.Components.blur3.capture.IBlur3Capture;
++import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceBitmap;
+ import org.telegram.ui.Components.chat.ViewPositionWatcher;
+ 
+ public class Blur3Utils {
+@@ -13,6 +17,26 @@ public class Blur3Utils {
+ 
+     }
+ 
++    private static final Matrix matrixTmp = new Matrix();
++
++    public static boolean checkBitmapSourceMatrixScale(@Nullable BlurredBackgroundSourceBitmap source, @Nullable View view) {
++        if (source == null || view == null || view.getWidth() == 0 || view.getHeight() == 0) {
++            return false;
++        }
++        final Bitmap bitmap = source.getBitmap();
++        if (bitmap == null || bitmap.isRecycled() || bitmap.getWidth() == 0 || bitmap.getHeight() == 0) {
++            return false;
++        }
++
++        matrixTmp.reset();
++        matrixTmp.setScale(
++            (float) view.getWidth() / bitmap.getWidth(),
++            (float) view.getHeight() / bitmap.getHeight());
++        source.setMatrix(matrixTmp);
++
++        return true;
++    }
++
+     private static final RectF captureTmpRectF = new RectF();
+     private static final RectF captureTmpChildPos = new RectF();
+ 
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/chat/ChatListViewPaddingsAnimator.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/chat/ChatListViewPaddingsAnimator.java
+index fdd2cf6d2..f95a8adce 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/chat/ChatListViewPaddingsAnimator.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/chat/ChatListViewPaddingsAnimator.java
+@@ -15,9 +15,8 @@ public class ChatListViewPaddingsAnimator {
+     private int currentAdditionalHeight;
+     public void setPaddings(
+         int paddingTopTarget,
+-        float paddingBottomAnimated, int paddingBottomTarget, boolean allowScrollCompensation
++        float paddingBottomAnimated, boolean allowScrollCompensation
+     ) {
+-        final float translationY = paddingBottomTarget - paddingBottomAnimated;
+         final int additionalHeight = 0; //(int) Math.ceil(Math.abs(translationY));
+ 
+         if (additionalHeight == 0 && currentAdditionalHeight != 0) {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/chat/ViewPositionWatcher.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/chat/ViewPositionWatcher.java
+index 221f33d36..8a6a831cd 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/chat/ViewPositionWatcher.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/chat/ViewPositionWatcher.java
+@@ -38,6 +38,7 @@ public final class ViewPositionWatcher implements
+         final ViewGroup parent;
+         final OnChangedListener listener;
+         final RectF last = new RectF();
++        boolean multiwindow;
+         boolean hasLast;
+ 
+         Tracked(@NonNull ViewGroup parent, @NonNull OnChangedListener listener) {
+@@ -48,6 +49,7 @@ public final class ViewPositionWatcher implements
+ 
+     private final WeakHashMap<View, List<Tracked>> tracked = new WeakHashMap<>();
+     private final RectF tmpRect = new RectF(); // reused for all calculations
++    private static final int[] tmpCords = new int[2];
+ 
+     public ViewPositionWatcher(@NonNull View anchorView) {
+         this.anchorView = anchorView;
+@@ -55,11 +57,19 @@ public final class ViewPositionWatcher implements
+         attachIfPossible();
+     }
+ 
+-    /** Subscribe a view for tracking relative to the given parent (must be an ancestor). */
+     public void subscribe(@NonNull View view,
+                           @NonNull ViewGroup parentView,
+                           @NonNull OnChangedListener listener) {
++        subscribe(view, parentView, listener, false);
++    }
++
++    /** Subscribe a view for tracking relative to the given parent (must be an ancestor). */
++    public void subscribe(@NonNull View view,
++                          @NonNull ViewGroup parentView,
++                          @NonNull OnChangedListener listener,
++                          boolean multiwindow) {
+         Tracked t = new Tracked(parentView, listener);
++        t.multiwindow = multiwindow;
+         List<Tracked> tList = tracked.get(view);
+         if (tList == null) {
+             tList = new ArrayList<>(1);
+@@ -72,6 +82,10 @@ public final class ViewPositionWatcher implements
+         // t.hasLast = true;
+ 
+         ensureListening();
++
++        if (multiwindow) {
++            view.getViewTreeObserver().addOnPreDrawListener(this);
++        }
+     }
+ 
+     /** Unsubscribe a specific view. */
+@@ -148,7 +162,15 @@ public final class ViewPositionWatcher implements
+             if (view == null || tList == null) continue;
+ 
+             for (Tracked t : tList) {
+-                if (!computeRectInParent(view, t.parent, tmpRect)) continue;
++                if (t.multiwindow) {
++                    view.getLocationOnScreen(tmpCords);
++                    tmpRect.set(tmpCords[0], tmpCords[1], tmpCords[0] + view.getWidth(), tmpCords[1] + view.getHeight());
++
++                    t.parent.getLocationOnScreen(tmpCords);
++                    tmpRect.offset(-tmpCords[0], -tmpCords[1]);
++                } else {
++                    if (!computeRectInParent(view, t.parent, tmpRect)) continue;
++                }
+ 
+                 if (!t.hasLast || !tmpRect.equals(t.last)) {
+                     t.last.set(tmpRect);
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/inset/WindowAnimatedInsetsProvider.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/inset/WindowAnimatedInsetsProvider.java
+index f73221380..b99964cbd 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/inset/WindowAnimatedInsetsProvider.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/inset/WindowAnimatedInsetsProvider.java
+@@ -117,7 +117,7 @@ public class WindowAnimatedInsetsProvider extends WindowInsetsAnimationCompat.Ca
+ 
+     @Nullable
+     public static WindowInsetsCompat calculateWindowInsets(WindowInsetsCompat rootInsets, View view, View rootView) {
+-        if (view == null || rootView == null || !ViewPositionWatcher.computeRectInParent(view, rootView, tmpRectF)) {
++        if (view == null || rootView == null || rootInsets == null || !ViewPositionWatcher.computeRectInParent(view, rootView, tmpRectF)) {
+             return null;
+         }
+         tmpRectF.round(tmpRect);
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ContentPreviewViewer.java b/TMessagesProj/src/main/java/org/telegram/ui/ContentPreviewViewer.java
+index bcec3f1e6..fe9742828 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ContentPreviewViewer.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ContentPreviewViewer.java
+@@ -16,12 +16,15 @@ import android.app.Activity;
+ import android.content.Context;
+ import android.content.SharedPreferences;
+ import android.graphics.Bitmap;
++import android.graphics.BitmapShader;
+ import android.graphics.Canvas;
+ import android.graphics.Color;
++import android.graphics.Matrix;
+ import android.graphics.Paint;
+ import android.graphics.Path;
+ import android.graphics.PixelFormat;
+ import android.graphics.Rect;
++import android.graphics.Shader;
+ import android.graphics.drawable.ColorDrawable;
+ import android.graphics.drawable.Drawable;
+ import android.os.Build;
+@@ -37,12 +40,13 @@ import android.view.KeyEvent;
+ import android.view.MotionEvent;
+ import android.view.View;
+ import android.view.ViewGroup;
+-import android.view.WindowInsets;
+ import android.view.WindowManager;
+ import android.widget.FrameLayout;
+ import android.widget.LinearLayout;
+ 
+ import androidx.annotation.NonNull;
++import androidx.core.view.ViewCompat;
++import androidx.core.view.WindowInsetsCompat;
+ import androidx.recyclerview.widget.LinearLayoutManager;
+ import androidx.recyclerview.widget.RecyclerView;
+ 
+@@ -88,14 +92,22 @@ import org.telegram.ui.Components.PaintingOverlay;
+ import org.telegram.ui.Components.Reactions.CustomEmojiReactionsWindow;
+ import org.telegram.ui.Components.ReactionsContainerLayout;
+ import org.telegram.ui.Components.RecyclerListView;
++import org.telegram.ui.Components.ScrimOptions;
+ import org.telegram.ui.Components.StickersAlert;
+ import org.telegram.ui.Components.StickersDialogs;
+ import org.telegram.ui.Components.SuggestEmojiView;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
++import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
++import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceBitmap;
++import org.telegram.ui.Components.blur3.utils.Blur3Utils;
++import org.telegram.ui.Components.chat.ViewPositionWatcher;
+ import org.telegram.ui.Stories.DarkThemeResourceProvider;
+ 
+ import java.util.ArrayList;
+ import java.util.List;
+ 
++import me.vkryl.core.reference.ReferenceList;
++
+ public class ContentPreviewViewer {
+ 
+     private class FrameLayoutDrawer extends FrameLayout {
+@@ -290,10 +302,13 @@ public class ContentPreviewViewer {
+ 
+     private boolean isRecentSticker;
+ 
+-    private WindowInsets lastInsets;
++    private WindowInsetsCompat lastInsets;
+ 
+     private int currentAccount;
+ 
++    private final BlurredBackgroundSourceBitmap scrimBlur3SourceBitmap = new BlurredBackgroundSourceBitmap();
++    private final BlurredBackgroundDrawableViewFactory scrimBlur3Factory = new BlurredBackgroundDrawableViewFactory(scrimBlur3SourceBitmap);
++
+     private ColorDrawable backgroundDrawable = new ColorDrawable(0x71000000);
+     private Bitmap blurrBitmap;
+     private Activity parentActivity;
+@@ -313,7 +328,7 @@ public class ContentPreviewViewer {
+     private boolean menuVisible;
+     private View popupLayout;
+     private float blurProgress;
+-    private Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+     private UnlockPremiumView unlockPremiumView;
+     private ReactionsContainerLayout reactionsLayout;
+     private FrameLayout reactionsLayoutContainer;
+@@ -333,6 +348,12 @@ public class ContentPreviewViewer {
+                 flags |= ActionBarPopupWindow.ActionBarPopupWindowLayout.FLAG_USE_SWIPEBACK;
+             }
+             ActionBarPopupWindow.ActionBarPopupWindowLayout previewMenu = new ActionBarPopupWindow.ActionBarPopupWindowLayout(containerView.getContext(), R.drawable.popup_fixed_alert4, resourcesProvider, flags);
++            previewMenu.setBackground(scrimBlur3Factory.create(previewMenu, true)
++                .setColorProvider(BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider))
++                .setRadius(dp(12))
++                .setPadding(dp(8))
++                .setHasPadding(true));
++
+             if (currentContentType == CONTENT_TYPE_CUSTOM_STIKER) {
+                 ArrayList<CharSequence> items = new ArrayList<>();
+                 final ArrayList<Integer> actions = new ArrayList<>();
+@@ -1488,11 +1509,20 @@ public class ContentPreviewViewer {
+                 }
+                 return super.dispatchKeyEvent(event);
+             }
++
++            @Override
++            protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++                super.onSizeChanged(w, h, oldw, oldh);
++                Blur3Utils.checkBitmapSourceMatrixScale(scrimBlur3SourceBitmap, windowView);
++                scrimBlur3Factory.invalidateAllLinkedViews();
++            }
+         };
++        scrimBlur3Factory.setSourceRootView(new ViewPositionWatcher(windowView), windowView);
++        scrimBlur3Factory.setLinkedViewsRef(new ReferenceList<>());
+         windowView.setFocusable(true);
+         windowView.setFocusableInTouchMode(true);
+         windowView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+-        windowView.setOnApplyWindowInsetsListener((v, insets) -> {
++        ViewCompat.setOnApplyWindowInsetsListener(windowView, (v, insets) -> {
+             lastInsets = insets;
+             return insets;
+         });
+@@ -1846,11 +1876,10 @@ public class ContentPreviewViewer {
+ 
+             if (blurProgress != 0 && blurrBitmap != null) {
+                 paint.setAlpha((int) (blurProgress * 255));
+-                canvas.save();
+-                canvas.scale(12f, 12f);
+-                canvas.drawColor(Theme.multAlpha(Theme.getColor(Theme.key_windowBackgroundGray, resourcesProvider), blurProgress));
+-                canvas.drawBitmap(blurrBitmap, 0, 0, paint);
+-                canvas.restore();
++                if (paint.getAlpha() != 255) {
++                    canvas.drawColor(Theme.multAlpha(Theme.getColor(Theme.key_windowBackgroundGray, resourcesProvider), blurProgress));
++                }
++                canvas.drawPaint(paint);
+             }
+         }
+ 
+@@ -2001,14 +2030,28 @@ public class ContentPreviewViewer {
+         }
+         preparingBitmap = true;
+         centerImage.setVisible(false, false);
+-        AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
++        ScrimOptions.makeGlobalBlurBitmaps((bitmapBg, bitmapOptions) -> {
+             centerImage.setVisible(true, false);
+-            blurrBitmap = bitmap;
++            blurrBitmap = bitmapBg;
++            BitmapShader bitmapShader = new BitmapShader(bitmapBg, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
++
++            Matrix m = new Matrix();
++            m.setScale(15, 15);
++            bitmapShader.setLocalMatrix(m);
++            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
++                bitmapShader.setFilterMode(BitmapShader.FILTER_MODE_LINEAR);
++            }
++            paint.setFilterBitmap(true);
++            paint.setShader(bitmapShader);
++
++            scrimBlur3SourceBitmap.setBitmap(bitmapOptions);
++            Blur3Utils.checkBitmapSourceMatrixScale(scrimBlur3SourceBitmap, windowView);
++            scrimBlur3Factory.invalidateAllLinkedViews();
+             preparingBitmap = false;
+             if (containerView != null) {
+                 containerView.invalidate();
+             }
+-        }, 12);
++        });
+     }
+ 
+     public boolean showMenuFor(View view) {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java
+index 4d5ecd17f..f32c68e6a 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java
+@@ -2000,7 +2000,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
+             }
+             additionalPadding = 0;
+ 
+-            final float filterTabsVisibility = filterTabsView != null && filterTabsView.getVisibility() == VISIBLE ? filterTabsView.getAlpha() : 0f;
++            final float filterTabsVisibility = getFilterTabsVisibilityFactor(false);
+             final float topPanelsVisibility = topPanelLayout != null ? topPanelLayout.getMetadata().getTotalVisibility() : 0f;
+ 
+             t += (int) (dp(36 + 14) * filterTabsVisibility);
+@@ -8408,7 +8408,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
+         }
+ 
+         final ChatActivity[] chatActivity = new ChatActivity[1];
+-        previewMenu[0] = new ActionBarPopupWindow.ActionBarPopupWindowLayout(getParentActivity(), R.drawable.popup_fixed_alert2, getResourceProvider(), flags);
++        previewMenu[0] = new ActionBarPopupWindow.ActionBarPopupWindowLayout(getParentActivity(), R.drawable.popup_fixed_alert4, getResourceProvider(), flags);
+ 
+         if (hasFolders) {
+             foldersMenu[0] = previewMenu[0].addViewToSwipeBack(foldersMenuView);
+@@ -13398,12 +13398,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
+         }
+     }
+ 
+-    private void checkUi_filterTabsVisible() {
+-        final float factor1 = 1f - animatorSearchVisible.getFloatValue();
++    private float getFilterTabsVisibilityFactor(boolean includeSearch) {
++        final float factor1 = includeSearch ? (1f - animatorSearchVisible.getFloatValue()) : 1f;
+         final float factor2 = 1f - getRightSlidingProgress();
+         final float factor3 = animatorFilterTabsVisible.getFloatValue();
+-        final float factor = factor1 * factor2 * factor3;
++        return factor1 * factor2 * factor3;
++    }
+ 
++    private void checkUi_filterTabsVisible() {
++        final float factor = getFilterTabsVisibilityFactor(true);
+         if (filterTabsView != null) {
+             final boolean alphaChanged = filterTabsView.getAlpha() != factor;
+ 
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/GradientHeaderActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/GradientHeaderActivity.java
+index 129a36969..75d19980c 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/GradientHeaderActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/GradientHeaderActivity.java
+@@ -142,6 +142,16 @@ public abstract class GradientHeaderActivity extends BaseFragment {
+         return true;
+     }
+ 
++    @Override
++    public boolean isSupportEdgeToEdge() {
++        return true;
++    }
++
++    @Override
++    public void onInsets(int left, int top, int right, int bottom) {
++        listView.setPadding(0, 0, 0, bottom);
++    }
++
+     @Override
+     public View createView(Context context) {
+         hasOwnBackground = true;
+@@ -156,7 +166,7 @@ public abstract class GradientHeaderActivity extends BaseFragment {
+         }
+ 
+         contentView = createContentView();
+-        contentView.setFitsSystemWindows(true);
++        actionBar.setAddToContainer(false);
+         listView = new RecyclerListView(context);
+         if (useFillLastLayoutManager) {
+             layoutManager = new FillLastLinearLayoutManager(context, AndroidUtilities.dp(68) + statusBarHeight - AndroidUtilities.dp(16), listView);
+@@ -217,7 +227,8 @@ public abstract class GradientHeaderActivity extends BaseFragment {
+ 
+         contentView.addView(particlesView = createParticlesView(), LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+         contentView.addView(backgroundView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+-        contentView.addView(listView);
++        contentView.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
++        contentView.addView(actionBar);
+ 
+         fragmentView = contentView;
+         actionBar.setBackground(null);
+@@ -402,10 +413,7 @@ public abstract class GradientHeaderActivity extends BaseFragment {
+ 
+             gradientTools.gradientMatrix(0, 0, getMeasuredWidth(), getMeasuredHeight(), -getMeasuredWidth() * 0.1f * progress, 0);
+             if (whiteBackground) {
+-                if (backgroundGradient == null) {
+-                    backgroundGradient = new LinearGradient(0, 0, 0, dp(350), new int[] {getThemedColor(Theme.key_windowBackgroundWhite), getThemedColor(Theme.key_windowBackgroundGray)}, new float[] {0.3f, 1}, Shader.TileMode.CLAMP);
+-                    backgroundGradientPaint.setShader(backgroundGradient);
+-                }
++                backgroundGradientPaint.setColor(getThemedColor(Theme.key_windowBackgroundGray));
+                 canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), backgroundGradientPaint);
+             } else {
+                 canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), gradientTools.paint);
+@@ -417,7 +425,9 @@ public abstract class GradientHeaderActivity extends BaseFragment {
+             headerBgPaint.setAlpha((int) (255 * (1f - alpha)));
+             setLightStatusBar(Theme.blendOver(Theme.getColor(Theme.key_premiumGradientBackground4, resourceProvider), headerBgPaint.getColor()));
+             canvas.drawRect(0, 0, getMeasuredWidth(), actionBar.getMeasuredHeight(), headerBgPaint);
++
+             super.dispatchDraw(canvas);
++
+             if (alpha <= 0.01f && drawActionBarShadow()) {
+                 parentLayout.drawHeaderShadow(canvas, 0xFF, actionBar.getMeasuredHeight());
+             }
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/LaunchActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/LaunchActivity.java
+index b767b401f..ef10f9498 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/LaunchActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/LaunchActivity.java
+@@ -7216,12 +7216,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
+                         frameLayout.addView(themeSwitchImageView, 0, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+                         themeSwitchSunView.setVisibility(View.GONE);
+                     } else {
+-                        if (darkThemeView != null) {
+-                            darkThemeView.setImageDrawable(null);
+-                        }
+-                        if (drawable != null && colorNotDark) {
+-                            drawable.setColorFilter(new PorterDuffColorFilter(0xFFFFFFFF, PorterDuff.Mode.SRC_IN));
+-                        }
+                         frameLayout.addView(themeSwitchImageView, 1, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+                         themeSwitchSunView.setTranslationX(pos[0] - dp(24));
+                         themeSwitchSunView.setTranslationY(pos[1] - dp(24));
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
+index 196467fee..f8c40cc29 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
+@@ -98,6 +98,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
+     private boolean dropCallsFragmentAfterPageScroll;
+ 
+     private UpdateLayoutWrapper updateLayoutWrapper;
++    private FrameLayout tabsViewWrapper;
+     private MainTabsLayout tabsView;
+     private BlurredBackgroundDrawable tabsViewBackground;
+     private View fadeView;
+@@ -310,7 +311,12 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
+         fadeView.setBackground(fadeDrawable);
+ 
+         contentView.addView(fadeView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM));
+-        contentView.addView(tabsView, LayoutHelper.createFrame(328 + DialogsActivity.MAIN_TABS_MARGIN * 2, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
++
++        tabsViewWrapper = new FrameLayout(context);
++        tabsViewWrapper.setOnClickListener(v -> {});
++        tabsViewWrapper.addView(tabsView, LayoutHelper.createFrame(328 + DialogsActivity.MAIN_TABS_MARGIN * 2, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
++        tabsViewWrapper.setClipToPadding(false);
++        contentView.addView(tabsViewWrapper, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
+ 
+         updateLayoutWrapper = new UpdateLayoutWrapper(context);
+         contentView.addView(updateLayoutWrapper, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
+@@ -320,9 +326,6 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
+             updateLayout.updateAppUpdateViews(currentAccount, false);
+         }
+ 
+-        //AndroidUtilities.cancelRunOnUIThread(justForTestR);
+-        //AndroidUtilities.runOnUIThread(justForTestR, 2000);
+-
+         checkUnreadCount(false);
+         return contentView;
+     }
+@@ -400,8 +403,6 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
+             }
+         }
+ 
+-        // o.addGap();
+-        // o.add(R.drawable.msg_leave, getString(R.string.LogOut), true, () -> presentFragment(new LogoutActivity()));
+         o.setBlur(true);
+         o.translate(0, -dp(4));
+         final ShapeDrawable bg = Theme.createRoundRectDrawable(dp(28), getThemedColor(Theme.key_windowBackgroundWhite));
+@@ -665,6 +666,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
+             }
+         }
+ 
++        tabsViewWrapper.setPadding(0, 0, 0, navigationBarHeight);
++
+         final WindowInsetsCompat consumed = isUpdateLayoutVisible ?
+             insets.inset(0, 0, 0, navigationBarHeight) : insets;
+ 
+@@ -728,19 +731,6 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
+         }
+     }
+ 
+-    /* Just For Test */
+-
+-    //private final Runnable justForTestR = this::justForTest;
+-
+-    //private void justForTest() {
+-    //    getUserConfig().setShowCallsTab(!getUserConfig().showCallsTab);
+-    //    NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.callTabsVisibleToggled);
+-    //    AndroidUtilities.cancelRunOnUIThread(justForTestR);
+-    //    AndroidUtilities.runOnUIThread(justForTestR, 3000);
+-    //}
+-
+-
+-
+     @Override
+     public boolean onFragmentCreate() {
+         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.fileLoaded);
+@@ -801,13 +791,13 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
+     private void checkUi_tabsPosition() {
+         final boolean isUpdateLayoutVisible = updateLayoutWrapper.isUpdateLayoutVisible();
+         final int updateLayoutHeight = isUpdateLayoutVisible ? dp(UpdateLayoutWrapper.HEIGHT) : 0;
+-        final int normalY = -(navigationBarHeight + updateLayoutHeight);
++        final int normalY = -(updateLayoutHeight);
+         final int hiddenY = normalY + dp(40);
+ 
+         final float factor = animatorTabsVisible.getFloatValue();
+         final float scale = lerp(0.85f, 1f, factor);
+ 
+-        tabsView.setTranslationY(lerp(hiddenY, normalY, factor));
++        tabsViewWrapper.setTranslationY(lerp(hiddenY, normalY, factor));
+         tabsView.setScaleX(scale);
+         tabsView.setScaleY(scale);
+         tabsView.setClickable(factor > 1);
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/MessageSendPreview.java b/TMessagesProj/src/main/java/org/telegram/ui/MessageSendPreview.java
+index be88662a6..362160dba 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/MessageSendPreview.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/MessageSendPreview.java
+@@ -10,9 +10,6 @@ import android.content.Context;
+ import android.graphics.Bitmap;
+ import android.graphics.BitmapShader;
+ import android.graphics.Canvas;
+-import android.graphics.ColorMatrix;
+-import android.graphics.ColorMatrixColorFilter;
+-import android.graphics.Insets;
+ import android.graphics.Matrix;
+ import android.graphics.Paint;
+ import android.graphics.Rect;
+@@ -28,13 +25,15 @@ import android.view.View;
+ import android.view.ViewGroup;
+ import android.view.ViewTreeObserver;
+ import android.view.Window;
+-import android.view.WindowInsets;
+ import android.view.WindowManager;
+ import android.widget.EditText;
+ import android.widget.FrameLayout;
+ 
+ import androidx.annotation.NonNull;
+ import androidx.collection.LongSparseArray;
++import androidx.core.graphics.Insets;
++import androidx.core.view.OnApplyWindowInsetsListener;
++import androidx.core.view.ViewCompat;
+ import androidx.core.view.WindowInsetsCompat;
+ import androidx.recyclerview.widget.ChatListItemAnimator;
+ import androidx.recyclerview.widget.GridLayoutManagerFixed;
+@@ -70,8 +69,14 @@ import org.telegram.ui.Components.LayoutHelper;
+ import org.telegram.ui.Components.Reactions.ReactionsLayoutInBubble;
+ import org.telegram.ui.Components.ReactionsContainerLayout;
+ import org.telegram.ui.Components.RecyclerListView;
++import org.telegram.ui.Components.ScrimOptions;
+ import org.telegram.ui.Components.SizeNotifierFrameLayout;
+ import org.telegram.ui.Components.Text;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
++import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
++import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceBitmap;
++import org.telegram.ui.Components.blur3.utils.Blur3Utils;
++import org.telegram.ui.Components.chat.ViewPositionWatcher;
+ import org.telegram.ui.Components.spoilers.SpoilerEffect2;
+ import org.telegram.ui.Stars.StarsIntroActivity;
+ import org.telegram.ui.Stories.recorder.KeyboardNotifier;
+@@ -84,7 +89,7 @@ public class MessageSendPreview extends Dialog implements NotificationCenter.Not
+     public final Theme.ResourcesProvider resourcesProvider;
+     public final int currentAccount = UserConfig.selectedAccount;
+ 
+-    private final Rect insets = new Rect();
++    private Insets insets = Insets.NONE;
+     private Bitmap blurBitmap;
+     private BitmapShader blurBitmapShader;
+     private Paint blurBitmapPaint;
+@@ -139,6 +144,9 @@ public class MessageSendPreview extends Dialog implements NotificationCenter.Not
+ 
+     private SpoilerEffect2 spoilerEffect2;
+ 
++    private final BlurredBackgroundSourceBitmap iBlur3SourceBitmap;
++    private final BlurredBackgroundDrawableViewFactory iBlur3Factory;
++
+     public MessageSendPreview(Context context, Theme.ResourcesProvider resourcesProvider) {
+         super(context, R.style.TransparentDialog);
+         this.context = context;
+@@ -176,6 +184,12 @@ public class MessageSendPreview extends Dialog implements NotificationCenter.Not
+                     layoutDone = true;
+                 }
+             }
++
++            @Override
++            protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++                super.onSizeChanged(w, h, oldw, oldh);
++                checkBitmapMatrix();
++            }
+         };
+         spoilerEffect2 = SpoilerEffect2.getInstance(SpoilerEffect2.TYPE_PREVIEW, windowView, windowView);
+         windowView.setOnClickListener(v -> {
+@@ -200,6 +214,11 @@ public class MessageSendPreview extends Dialog implements NotificationCenter.Not
+                 }
+             }
+         });
++
++        iBlur3SourceBitmap = new BlurredBackgroundSourceBitmap();
++        iBlur3Factory = new BlurredBackgroundDrawableViewFactory(iBlur3SourceBitmap);
++        iBlur3Factory.setSourceRootView(new ViewPositionWatcher(windowView), windowView);
++
+         containerView = new SizeNotifierFrameLayout(context) {
+             final int[] pos = new int[2];
+             final int[] pos2 = new int[2];
+@@ -409,29 +428,15 @@ public class MessageSendPreview extends Dialog implements NotificationCenter.Not
+         };
+         containerView.setClipToPadding(false);
+         windowView.addView(containerView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.FILL));
+-
+-        if (Build.VERSION.SDK_INT >= 21) {
+-            windowView.setFitsSystemWindows(true);
+-            windowView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+-                @NonNull
+-                @Override
+-                public WindowInsets onApplyWindowInsets(@NonNull View v, @NonNull WindowInsets insets) {
+-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+-                        Insets r = insets.getInsets(WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.systemBars());
+-                        MessageSendPreview.this.insets.set(r.left, r.top, r.right, r.bottom);
+-                    } else {
+-                        MessageSendPreview.this.insets.set(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+-                    }
+-                    containerView.setPadding(MessageSendPreview.this.insets.left, MessageSendPreview.this.insets.top, MessageSendPreview.this.insets.right, MessageSendPreview.this.insets.bottom);
+-                    windowView.requestLayout();
+-                    if (Build.VERSION.SDK_INT >= 30) {
+-                        return WindowInsets.CONSUMED;
+-                    } else {
+-                        return insets.consumeSystemWindowInsets();
+-                    }
+-                }
+-            });
+-        }
++        ViewCompat.setOnApplyWindowInsetsListener(windowView, new OnApplyWindowInsetsListener() {
++            @Override
++            public @NonNull WindowInsetsCompat onApplyWindowInsets(@NonNull View v, @NonNull WindowInsetsCompat i) {
++                insets = i.getInsets(WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.systemBars());
++                containerView.setPadding(insets.left, insets.top, insets.right, insets.bottom);
++                windowView.requestLayout();
++                return WindowInsetsCompat.CONSUMED;
++            }
++        });
+ 
+         chatListView = new RecyclerListView(context, resourcesProvider) {
+             @Override
+@@ -1234,6 +1239,9 @@ public class MessageSendPreview extends Dialog implements NotificationCenter.Not
+     }
+ 
+     public void setItemOptions(ItemOptions options) {
++        options.setGapBackgroundColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
++        options.setBlurBackground(iBlur3Factory, BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider), false);
++
+         optionsView = options.getLayout();
+         containerView.addView(optionsView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+     }
+@@ -1758,23 +1766,23 @@ public class MessageSendPreview extends Dialog implements NotificationCenter.Not
+         if (anchorSendButton != null) {
+             anchorSendButton.setAlpha(0.0f);
+         }
+-        AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
++
++        ScrimOptions.makeGlobalBlurBitmaps((bitmapBg, bitmapOptions) -> {
+             if (anchorSendButton != null) {
+                 anchorSendButton.setAlpha(oldAlpha);
+             }
+             if (withoutView != null) {
+                 withoutView.setVisibility(View.VISIBLE);
+             }
+-            blurBitmap = bitmap;
++            blurBitmap = bitmapBg;
+ 
+             blurBitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+             blurBitmapPaint.setShader(blurBitmapShader = new BitmapShader(blurBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+-            ColorMatrix colorMatrix = new ColorMatrix();
+-            AndroidUtilities.adjustSaturationColorMatrix(colorMatrix, Theme.isCurrentThemeDark() ? .08f : +.25f);
+-            AndroidUtilities.adjustBrightnessColorMatrix(colorMatrix, Theme.isCurrentThemeDark() ? -.02f : -.07f);
+-            blurBitmapPaint.setColorFilter(new ColorMatrixColorFilter(colorMatrix));
+             blurMatrix = new Matrix();
+-        }, 14);
++
++            iBlur3SourceBitmap.setBitmap(bitmapOptions);
++            checkBitmapMatrix();
++        });
+     }
+ 
+     public void updateColors() {
+@@ -1908,4 +1916,11 @@ public class MessageSendPreview extends Dialog implements NotificationCenter.Not
+         canvas.restore();
+     }
+ 
++    private void checkBitmapMatrix() {
++        Blur3Utils.checkBitmapSourceMatrixScale(iBlur3SourceBitmap, windowView);
++        if (optionsView != null) {
++            optionsView.invalidate();
++        }
++    }
++
+ }
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/PhotoViewer.java b/TMessagesProj/src/main/java/org/telegram/ui/PhotoViewer.java
+index 713a86539..49f2b523c 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/PhotoViewer.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/PhotoViewer.java
+@@ -6853,6 +6853,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
+             }
+         };
+         captionEdit.setBlurredBackgroundDrawableForMentions(iBlur3FactoryFrostedLiquidGlass);
++        // captionEdit.editText.getEditText().setBlurredBackgroundDrawableViewFactory(iBlur3FactoryFrostedLiquidGlass);
+         captionEdit.setOnTimerChange(seconds -> {
+             Object object1 = imagesArrLocals.get(currentIndex);
+             if (object1 instanceof MediaController.PhotoEntry) {
+@@ -7514,6 +7515,16 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
+                     setMeasuredDimension(width + getPaddingLeft() + getPaddingRight(), height);
+                 }
+             }
++
++            @Override
++            public void draw(@NonNull Canvas canvas) {
++                for (int a = 0, N = getChildCount(); a < N; a++) {
++                    if (getChildAt(a).getVisibility() == VISIBLE) {
++                        super.draw(canvas);
++                        return;
++                    }
++                }
++            }
+         };
+         itemsLayout.setOrientation(LinearLayout.HORIZONTAL);
+         itemsLayout.setPadding(dp(2), 0, dp(2), 0);
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/PremiumPreviewFragment.java b/TMessagesProj/src/main/java/org/telegram/ui/PremiumPreviewFragment.java
+index 5ef966426..664fbaaac 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/PremiumPreviewFragment.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/PremiumPreviewFragment.java
+@@ -95,6 +95,7 @@ import org.telegram.ui.Cells.TextCell;
+ import org.telegram.ui.Cells.TextInfoPrivacyCell;
+ import org.telegram.ui.Components.AlertsCreator;
+ import org.telegram.ui.Components.AnimatedEmojiDrawable;
++import org.telegram.ui.Components.Bulletin;
+ import org.telegram.ui.Components.BulletinFactory;
+ import org.telegram.ui.Components.CubicBezierInterpolator;
+ import org.telegram.ui.Components.FillLastLinearLayoutManager;
+@@ -2158,6 +2159,12 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
+             backgroundView.imageView.setDialogVisible(false);
+         }
+         particlesView.setPaused(false);
++        Bulletin.addDelegate(this, new Bulletin.Delegate() {
++            @Override
++            public int getBottomOffset(int tag) {
++                return AndroidUtilities.navigationBarHeight;
++            }
++        });
+     }
+ 
+     @Override
+@@ -2169,6 +2176,7 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
+         if (particlesView != null) {
+             particlesView.setPaused(true);
+         }
++        Bulletin.removeDelegate(this);
+     }
+ 
+     @Override
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ProfileActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/ProfileActivity.java
+index fd7d0c0f5..144a83d2a 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ProfileActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ProfileActivity.java
+@@ -2450,6 +2450,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
+ 
+         if (hasMainTabs) {
+             actionBar.setBackButtonDrawable(new BackDrawable(false));
++            actionBar.backButtonImageView.setContentDescription(getString(R.string.QrCode));
+             actionBar.backButtonImageView.setImageResource(R.drawable.outline_header_qr_24);
+             actionBar.backButtonImageView.setColorFilter(getThemedColor(Theme.key_actionBarDefaultIcon), PorterDuff.Mode.SRC_IN);
+             actionBar.backButtonImageView.setOnClickListener(v -> {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Stars/StarsIntroActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/Stars/StarsIntroActivity.java
+index 976dc0a12..65ee0dd99 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Stars/StarsIntroActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Stars/StarsIntroActivity.java
+@@ -255,11 +255,6 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
+         }
+     }
+ 
+-    @Override
+-    public int getNavigationBarColor() {
+-        return Theme.getColor(Theme.key_dialogBackgroundGray);
+-    }
+-
+     @Override
+     public View createView(Context context) {
+         useFillLastLayoutManager = false;
+@@ -282,7 +277,6 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
+                 super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(firstViewHeight, MeasureSpec.EXACTLY));
+             }
+         };
+-        emptyLayout.setBackgroundColor(Theme.getColor(Theme.key_dialogBackgroundGray));
+ 
+         super.createView(context);
+ 
+@@ -495,7 +489,7 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
+                 if (target == listView && transactionsLayout.isAttachedToWindow()) {
+                     RecyclerListView innerListView = transactionsLayout.getCurrentListView();
+                     int bottom = ((View) transactionsLayout.getParent()).getBottom();
+-                    if (listView.getHeight() - bottom >= 0) {
++                    if (listView.getHeight() - listView.getPaddingBottom() - bottom >= 0) {
+                         consumed[1] = dyUnconsumed;
+                         innerListView.scrollBy(0, dyUnconsumed);
+                     }
+@@ -533,7 +527,7 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
+                 int bottom = ((View) transactionsLayout.getParent()).getBottom();
+                 if (dy < 0) {
+                     boolean scrolledInner = false;
+-                    if (listView.getHeight() - bottom >= 0) {
++                    if (listView.getHeight() - listView.getPaddingBottom() - bottom >= 0) {
+                         RecyclerListView innerListView = transactionsLayout.getCurrentListView();
+                         LinearLayoutManager linearLayoutManager = (LinearLayoutManager) innerListView.getLayoutManager();
+                         int pos = linearLayoutManager.findFirstVisibleItemPosition();
+@@ -567,7 +561,7 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
+                         }
+                     } else if (dy > 0) {
+                         RecyclerListView innerListView = transactionsLayout.getCurrentListView();
+-                        if (listView.getHeight() - bottom >= 0 && innerListView != null && !innerListView.canScrollVertically(1)) {
++                        if (listView.getHeight() - listView.getPaddingBottom() - bottom >= 0 && innerListView != null && !innerListView.canScrollVertically(1)) {
+                             consumed[1] = dy;
+                             listView.stopScroll();
+                         }
+@@ -601,7 +595,7 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
+         if (transactionsLayout == null || !(transactionsLayout.getParent() instanceof View))
+             return false;
+         int bottom = ((View) transactionsLayout.getParent()).getBottom();
+-        return listView.getHeight() - bottom >= 0;
++        return listView.getHeight() - listView.getPaddingBottom() - bottom >= 0;
+     }
+ 
+     @Override
+@@ -737,9 +731,9 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
+         }
+ 
+         if (hadTransactions = c.hasTransactions()) {
+-            items.add(UItem.asFullscreenCustom(transactionsLayout, ActionBar.getCurrentActionBarHeight() + AndroidUtilities.statusBarHeight + dp(12)));
++            items.add(UItem.asFullscreenCustom(transactionsLayout, ActionBar.getCurrentActionBarHeight() + AndroidUtilities.statusBarHeight + dp(24) + AndroidUtilities.navigationBarHeight));
+         } else {
+-            items.add(UItem.asCustom(emptyLayout));
++            items.add(UItem.asCustomShadow(emptyLayout));
+         }
+     }
+ 
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Stories/recorder/CollageLayoutView2.java b/TMessagesProj/src/main/java/org/telegram/ui/Stories/recorder/CollageLayoutView2.java
+index d104e3430..639685e44 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Stories/recorder/CollageLayoutView2.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Stories/recorder/CollageLayoutView2.java
+@@ -872,7 +872,7 @@ public class CollageLayoutView2 extends FrameLayout implements ItemOptions.Scrim
+             })
+             .setGravity(Gravity.CENTER_HORIZONTAL)
+             .allowCenter(true)
+-            .setBlur(true)
++            .setBlur(true, false)
+             .setRoundRadius(dp(12), dp(10))
+             .setOnDismiss(() -> {
+                 if (longPressedPart != null && longPressedPart.videoPlayer != null) {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/TON/TONIntroActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/TON/TONIntroActivity.java
+index 68a1a1157..c67979532 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/TON/TONIntroActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/TON/TONIntroActivity.java
+@@ -198,7 +198,6 @@ public class TONIntroActivity extends GradientHeaderActivity implements Notifica
+                 super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(firstViewHeight, MeasureSpec.EXACTLY));
+             }
+         };
+-        emptyLayout.setBackgroundColor(Theme.getColor(allowTopUp ? Theme.key_dialogBackgroundGray : Theme.key_dialogBackground));
+ 
+         super.createView(context);
+ 
+@@ -625,9 +624,9 @@ public class TONIntroActivity extends GradientHeaderActivity implements Notifica
+ 
+         if (hadTransactions = c.hasTransactions()) {
+             if (!allowTopUp) items.add(UItem.asShadow(null));
+-            items.add(UItem.asFullscreenCustom(transactionsLayout, ActionBar.getCurrentActionBarHeight() + AndroidUtilities.statusBarHeight + dp(12)));
++            items.add(UItem.asFullscreenCustom(transactionsLayout, ActionBar.getCurrentActionBarHeight() + AndroidUtilities.statusBarHeight + dp(24) + AndroidUtilities.navigationBarHeight));
+         } else {
+-            items.add(UItem.asCustom(emptyLayout));
++            items.add(UItem.asCustomShadow(emptyLayout));
+         }
+     }
+ 
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/TodoItemMenu.java b/TMessagesProj/src/main/java/org/telegram/ui/TodoItemMenu.java
+index 32d52f501..c2844cadb 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/TodoItemMenu.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/TodoItemMenu.java
+@@ -2,6 +2,7 @@ package org.telegram.ui;
+ 
+ import static org.telegram.messenger.AndroidUtilities.dp;
+ import static org.telegram.messenger.AndroidUtilities.lerp;
++import static org.telegram.messenger.AndroidUtilities.trim;
+ import static org.telegram.messenger.LocaleController.getString;
+ 
+ import android.animation.Animator;
+@@ -14,52 +15,37 @@ import android.graphics.BitmapShader;
+ import android.graphics.Canvas;
+ import android.graphics.ColorMatrix;
+ import android.graphics.ColorMatrixColorFilter;
+-import android.graphics.Insets;
+ import android.graphics.Matrix;
+ import android.graphics.Paint;
+ import android.graphics.Path;
+-import android.graphics.PorterDuff;
+-import android.graphics.PorterDuffXfermode;
+-import android.graphics.RadialGradient;
+-import android.graphics.Rect;
+-import android.graphics.RectF;
+ import android.graphics.Shader;
+-import android.graphics.SurfaceTexture;
+ import android.graphics.drawable.Drawable;
+-import android.net.Uri;
+ import android.os.Build;
+ import android.os.Bundle;
+-import android.text.Layout;
+ import android.text.TextUtils;
+ import android.util.TypedValue;
+ import android.view.Gravity;
+ import android.view.KeyEvent;
+ import android.view.MotionEvent;
+-import android.view.TextureView;
+ import android.view.View;
+ import android.view.ViewGroup;
+ import android.view.Window;
+-import android.view.WindowInsets;
+ import android.view.WindowManager;
+-import android.view.animation.LinearInterpolator;
+ import android.widget.FrameLayout;
+ import android.widget.LinearLayout;
+ import android.widget.TextView;
+ import android.widget.Toast;
+ 
+ import androidx.annotation.NonNull;
++import androidx.core.graphics.Insets;
++import androidx.core.view.OnApplyWindowInsetsListener;
++import androidx.core.view.ViewCompat;
+ import androidx.core.view.WindowInsetsCompat;
+ 
+-import com.google.android.exoplayer2.ExoPlayer;
+-import com.google.android.exoplayer2.util.Util;
+-
+ import org.telegram.messenger.AndroidUtilities;
+-import org.telegram.messenger.BuildVars;
+ import org.telegram.messenger.ChatObject;
+ import org.telegram.messenger.DialogObject;
+-import org.telegram.messenger.FileLoader;
+ import org.telegram.messenger.LocaleController;
+-import org.telegram.messenger.MediaController;
+ import org.telegram.messenger.MessageObject;
+ import org.telegram.messenger.MessagesController;
+ import org.telegram.messenger.R;
+@@ -67,6 +53,7 @@ import org.telegram.messenger.SharedConfig;
+ import org.telegram.messenger.UserConfig;
+ import org.telegram.messenger.UserObject;
+ import org.telegram.messenger.Utilities;
++import org.telegram.messenger.utils.ViewOutlineProviderImpl;
+ import org.telegram.tgnet.ConnectionsManager;
+ import org.telegram.tgnet.TLObject;
+ import org.telegram.tgnet.TLRPC;
+@@ -76,29 +63,25 @@ import org.telegram.ui.ActionBar.Theme;
+ import org.telegram.ui.Cells.BaseCell;
+ import org.telegram.ui.Cells.ChatActionCell;
+ import org.telegram.ui.Cells.ChatMessageCell;
+-import org.telegram.ui.Components.AnimatedFloat;
+ import org.telegram.ui.Components.AudioVisualizerDrawable;
+ import org.telegram.ui.Components.Bulletin;
+ import org.telegram.ui.Components.BulletinFactory;
+ import org.telegram.ui.Components.CubicBezierInterpolator;
+-import org.telegram.ui.Components.EarListener;
+ import org.telegram.ui.Components.ItemOptions;
+ import org.telegram.ui.Components.LayoutHelper;
+ import org.telegram.ui.Components.MessagePreviewView;
+ import org.telegram.ui.Components.MessagePrivateSeenView;
+-import org.telegram.ui.Components.PopupSwipeBackLayout;
+-import org.telegram.ui.Components.Premium.PremiumFeatureBottomSheet;
+ import org.telegram.ui.Components.Reactions.ReactionsLayoutInBubble;
+ import org.telegram.ui.Components.ReactionsContainerLayout;
+ import org.telegram.ui.Components.RecyclerListView;
+-import org.telegram.ui.Components.ScaleStateListAnimator;
+-import org.telegram.ui.Components.ThanosEffect;
+-import org.telegram.ui.Components.TimerParticles;
+-import org.telegram.ui.Components.VideoPlayer;
++import org.telegram.ui.Components.ScrimOptions;
+ import org.telegram.ui.Components.ViewPagerFixed;
+-import org.telegram.ui.Stories.recorder.HintView2;
++import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
++import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
++import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceBitmap;
++import org.telegram.ui.Components.blur3.utils.Blur3Utils;
++import org.telegram.ui.Components.chat.ViewPositionWatcher;
+ 
+-import java.io.File;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+@@ -114,7 +97,7 @@ public class TodoItemMenu extends Dialog {
+     private TextView hintTextView;
+     private MessagePreviewView.TabsView tabsView;
+ 
+-    private final Rect insets = new Rect();
++    private Insets insets = Insets.NONE;
+     private Bitmap blurBitmap;
+     private BitmapShader blurBitmapShader;
+     private Paint blurBitmapPaint;
+@@ -124,6 +107,9 @@ public class TodoItemMenu extends Dialog {
+     private float openProgress;
+     private float openProgress2;
+ 
++    private final BlurredBackgroundSourceBitmap iBlur3SourceBitmap;
++    private final BlurredBackgroundDrawableViewFactory iBlur3Factory;
++
+     public TodoItemMenu(Context context, Theme.ResourcesProvider resourcesProvider) {
+         super(context, R.style.TransparentDialog);
+         this.context = context;
+@@ -167,10 +153,21 @@ public class TodoItemMenu extends Dialog {
+                 super.onLayout(changed, left, top, right, bottom);
+                 setupTranslation();
+             }
++
++            @Override
++            protected void onSizeChanged(int w, int h, int oldw, int oldh) {
++                super.onSizeChanged(w, h, oldw, oldh);
++                checkBitmapMatrix();
++            }
+         };
+         windowView.setOnClickListener(v -> {
+             dismiss();
+         });
++
++        iBlur3SourceBitmap = new BlurredBackgroundSourceBitmap();
++        iBlur3Factory = new BlurredBackgroundDrawableViewFactory(iBlur3SourceBitmap);
++        iBlur3Factory.setSourceRootView(new ViewPositionWatcher(windowView), windowView);
++
+         containerView = new FrameLayout(context) {
+             @Override
+             protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+@@ -251,6 +248,11 @@ public class TodoItemMenu extends Dialog {
+         tabsView.addTab(1, getString(R.string.TodoMenuTabList));
+         containerView.addView(tabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 66, Gravity.BOTTOM));
+         tabsView.setOnTabClick(viewPager::scrollToPosition);
++        tabsView.setBackground(iBlur3Factory.create(tabsView)
++            .setColorProvider(BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider))
++            .setHasPadding(true)
++            .setPadding(dp(8))
++            .setRadius(dp(16)));
+ 
+         hintTextView = new TextView(context);
+         hintTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+@@ -259,28 +261,16 @@ public class TodoItemMenu extends Dialog {
+         hintTextView.setGravity(Gravity.CENTER);
+         containerView.addView(hintTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM, 0, 0, 0, 66));
+ 
+-        if (Build.VERSION.SDK_INT >= 21) {
+-            windowView.setFitsSystemWindows(true);
+-            windowView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+-                @NonNull
+-                @Override
+-                public WindowInsets onApplyWindowInsets(@NonNull View v, @NonNull WindowInsets insets) {
+-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+-                        Insets r = insets.getInsets(WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.systemBars());
+-                        TodoItemMenu.this.insets.set(r.left, r.top, r.right, r.bottom);
+-                    } else {
+-                        TodoItemMenu.this.insets.set(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+-                    }
+-                    containerView.setPadding(TodoItemMenu.this.insets.left, TodoItemMenu.this.insets.top, TodoItemMenu.this.insets.right, TodoItemMenu.this.insets.bottom);
+-                    windowView.requestLayout();
+-                    if (Build.VERSION.SDK_INT >= 30) {
+-                        return WindowInsets.CONSUMED;
+-                    } else {
+-                        return insets.consumeSystemWindowInsets();
+-                    }
+-                }
+-            });
+-        }
++        ViewCompat.setOnApplyWindowInsetsListener(windowView, new OnApplyWindowInsetsListener() {
++            @Override
++            public @NonNull WindowInsetsCompat onApplyWindowInsets(@NonNull View v, @NonNull WindowInsetsCompat i) {
++                insets = i.getInsets(WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.systemBars());
++                containerView.setPadding(insets.left, insets.top, insets.right, insets.bottom);
++                windowView.requestLayout();
++
++                return WindowInsetsCompat.CONSUMED;
++            }
++        });
+     }
+ 
+     @Override
+@@ -299,14 +289,13 @@ public class TodoItemMenu extends Dialog {
+         params.flags &= ~WindowManager.LayoutParams.FLAG_DIM_BEHIND;
+         params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING;
+         params.flags &=~ WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
+-        if (Build.VERSION.SDK_INT >= 21) {
+-            params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+-                WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
+-                WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS |
+-                WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION;
+-        }
+-        params.flags |= WindowManager.LayoutParams.FLAG_FULLSCREEN;
+-        params.flags |= WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
++        params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
++                | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR
++                | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
++                | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
++                | WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
++                | WindowManager.LayoutParams.FLAG_FULLSCREEN
++                | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
+         if (Build.VERSION.SDK_INT >= 28) {
+             params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+         }
+@@ -316,6 +305,11 @@ public class TodoItemMenu extends Dialog {
+         AndroidUtilities.setLightNavigationBar(windowView, !Theme.isCurrentThemeDark());
+     }
+ 
++    private void checkBitmapMatrix() {
++        Blur3Utils.checkBitmapSourceMatrixScale(iBlur3SourceBitmap, windowView);
++        iBlur3Factory.invalidateAllLinkedViews();
++    }
++
+     private MessageObject messageObject;
+     private boolean isOut;
+     private ChatMessageCell myTaskCell;
+@@ -553,6 +547,8 @@ public class TodoItemMenu extends Dialog {
+             }
+         }
+ 
++        taskOptions.setGapBackgroundColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
++        taskOptions.setBlurBackground(iBlur3Factory, BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider), false);
+         taskOptions.setupSelectors();
+         taskOptionsView = taskOptions.getLayout();
+         taskOptionsView.setPivotX(0);
+@@ -684,6 +680,8 @@ public class TodoItemMenu extends Dialog {
+             });
+         }
+ 
++        messageOptions.setGapBackgroundColor(Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem, resourcesProvider), 0.06f));
++        messageOptions.setBlurBackground(iBlur3Factory, BlurredBackgroundProviderImpl.scrimMenuBackground(resourcesProvider), false);
+         messageOptions.setupSelectors();
+         messageOptionsView = messageOptions.getLayout();
+         messageOptionsView.setPivotX(0);
+@@ -876,11 +874,12 @@ public class TodoItemMenu extends Dialog {
+         if (withoutView != null) {
+             withoutView.setVisibility(View.INVISIBLE);
+         }
+-        AndroidUtilities.makeGlobalBlurBitmap(bitmap -> {
++
++        ScrimOptions.makeGlobalBlurBitmaps((bitmapBg, bitmapOptions) -> {
+             if (withoutView != null) {
+                 withoutView.setVisibility(View.VISIBLE);
+             }
+-            blurBitmap = bitmap;
++            blurBitmap = bitmapBg;
+ 
+             blurBitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+             blurBitmapPaint.setShader(blurBitmapShader = new BitmapShader(blurBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+@@ -889,7 +888,10 @@ public class TodoItemMenu extends Dialog {
+             AndroidUtilities.adjustBrightnessColorMatrix(colorMatrix, Theme.isCurrentThemeDark() ? -.02f : -.04f);
+             blurBitmapPaint.setColorFilter(new ColorMatrixColorFilter(colorMatrix));
+             blurMatrix = new Matrix();
+-        }, 14);
++
++            iBlur3SourceBitmap.setBitmap(bitmapOptions);
++            checkBitmapMatrix();
++        });
+     }
+ 
+     @Override
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ViewPagerActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/ViewPagerActivity.java
+index 4867636d3..1df621cb6 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ViewPagerActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ViewPagerActivity.java
+@@ -216,6 +216,10 @@ public abstract class ViewPagerActivity extends BaseFragment {
+         for (int a = 0, N = fragmentsArr.size(); a < N; a++) {
+             final FragmentState state = fragmentsArr.valueAt(a);
+             if (state != null) {
++                if (state.isResumed) {
++                    state.fragment.onPause();
++                    state.isResumed = false;
++                }
+                 state.fragment.clearViews();
+             }
+         }
+@@ -394,7 +398,7 @@ public abstract class ViewPagerActivity extends BaseFragment {
+             final boolean isOpen = newVisibility > oldVisibility;
+             final boolean backward = false; // todo: support backward
+ 
+-            if (!isResumed && visibilityByViewPage > 0) {
++            if (!isResumed && visibilityByViewPage > 0 && parentIsResumed && fragment.fragmentView != null) {
+                 fragment.onResume();
+                 isResumed = true;
+             }
+diff --git a/TMessagesProj/src/main/res/drawable/menu_sidebar_bottom.xml b/TMessagesProj/src/main/res/drawable/menu_sidebar_bottom.xml
+new file mode 100644
+index 000000000..c213da9b3
+--- /dev/null
++++ b/TMessagesProj/src/main/res/drawable/menu_sidebar_bottom.xml
+@@ -0,0 +1,5 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:height="24dp" android:viewportHeight="72" android:viewportWidth="72" android:width="24dp">
++      
++    <path android:fillColor="#FFFFFF" android:fillType="nonZero" android:pathData="M51,11.75C57.765,11.75 63.25,17.235 63.25,24L63.25,48C63.25,54.765 57.765,60.25 51,60.25L21,60.25C14.235,60.25 8.75,54.765 8.75,48L8.75,24C8.75,17.235 14.235,11.75 21,11.75L51,11.75ZM58.75,40.249L13.25,40.249L13.25,48C13.25,52.28 16.72,55.75 21,55.75L51,55.75C55.28,55.75 58.75,52.28 58.75,48L58.75,40.249ZM52,45.25C53.243,45.25 54.25,46.257 54.25,47.5C54.25,48.743 53.243,49.75 52,49.75L47,49.75C45.757,49.75 44.75,48.743 44.75,47.5C44.75,46.257 45.757,45.25 47,45.25L52,45.25ZM38,45.25C39.243,45.25 40.25,46.257 40.25,47.5C40.25,48.743 39.243,49.75 38,49.75L33,49.75C31.757,49.75 30.75,48.743 30.75,47.5C30.75,46.257 31.757,45.25 33,45.25L38,45.25ZM25,45.25C26.243,45.25 27.25,46.257 27.25,47.5C27.25,48.743 26.243,49.75 25,49.75L20,49.75C18.757,49.75 17.75,48.743 17.75,47.5C17.75,46.257 18.757,45.25 20,45.25L25,45.25ZM51,16.25L21,16.25L20.208,16.29C16.3,16.687 13.25,19.987 13.25,24L13.25,35.749L58.75,35.749L58.75,24C58.75,19.72 55.28,16.25 51,16.25Z" android:strokeColor="#00000000"/>
++    
++</vector>
+diff --git a/TMessagesProj/src/main/res/drawable/menu_sidebar.xml b/TMessagesProj/src/main/res/drawable/menu_sidebar_left.xml
+similarity index 100%
+rename from TMessagesProj/src/main/res/drawable/menu_sidebar.xml
+rename to TMessagesProj/src/main/res/drawable/menu_sidebar_left.xml
+diff --git a/TMessagesProj/src/main/res/drawable/menu_sidebar_top.xml b/TMessagesProj/src/main/res/drawable/menu_sidebar_top.xml
+new file mode 100644
+index 000000000..659f17e8f
+--- /dev/null
++++ b/TMessagesProj/src/main/res/drawable/menu_sidebar_top.xml
+@@ -0,0 +1,5 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:height="24dp" android:viewportHeight="72" android:viewportWidth="72" android:width="24dp">
++      
++    <path android:fillColor="#FFFFFF" android:fillType="nonZero" android:pathData="M51,11.75C57.765,11.75 63.25,17.235 63.25,24L63.25,48C63.25,54.765 57.765,60.25 51,60.25L21,60.25C14.235,60.25 8.75,54.765 8.75,48L8.75,24C8.75,17.235 14.235,11.75 21,11.75L51,11.75ZM58.75,36.249L13.25,36.249L13.25,48C13.25,52.28 16.72,55.75 21,55.75L51,55.75C55.28,55.75 58.75,52.28 58.75,48L58.75,36.249ZM51,16.25L21,16.25L20.208,16.29C16.3,16.687 13.25,19.987 13.25,24L13.25,31.749L58.75,31.749L58.75,24C58.75,19.72 55.28,16.25 51,16.25ZM52,22.25C53.243,22.25 54.25,23.257 54.25,24.5C54.25,25.743 53.243,26.75 52,26.75L47,26.75C45.757,26.75 44.75,25.743 44.75,24.5C44.75,23.257 45.757,22.25 47,22.25L52,22.25ZM38,22.25C39.243,22.25 40.25,23.257 40.25,24.5C40.25,25.743 39.243,26.75 38,26.75L33,26.75C31.757,26.75 30.75,25.743 30.75,24.5C30.75,23.257 31.757,22.25 33,22.25L38,22.25ZM25,22.25C26.243,22.25 27.25,23.257 27.25,24.5C27.25,25.743 26.243,26.75 25,26.75L20,26.75C18.757,26.75 17.75,25.743 17.75,24.5C17.75,23.257 18.757,22.25 20,22.25L25,22.25Z" android:strokeColor="#00000000"/>
++    
++</vector>
+diff --git a/TMessagesProj/src/main/res/values/strings.xml b/TMessagesProj/src/main/res/values/strings.xml
+index 2f5d55532..9b652bee8 100644
+--- a/TMessagesProj/src/main/res/values/strings.xml
++++ b/TMessagesProj/src/main/res/values/strings.xml
+@@ -5009,6 +5009,8 @@
+     <string name="AccDescrMentionReaction">With new reaction</string>
+     <string name="AccDescrSpeedSlider">Choose speed</string>
+     <string name="AccDescrCaptureStory">Capture story</string>
++    <string name="AccDescrProfileMusic">Profile Music</string>
++    <string name="AccDescrProfileRatingLevel">Profile Stars Rating Level</string>
+     <!--date formatters-->
+     <string name="formatterBoostExpired">MMM dd, yyyy</string>
+     <string name="formatterGiveawayCard">dd MMM yyyy</string>
+diff --git a/gradle.properties b/gradle.properties
+index bc46084cf..3fd64dcc5 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -13,8 +13,8 @@
+ # http://www.gradle.org/docs/current/userguide/multi_project_builds.html#sec:decoupled_projects
+ # org.gradle.parallel=true
+ #Sat Mar 12 05:53:50 MSK 2016
+-APP_VERSION_CODE=6580
+-APP_VERSION_NAME=12.5.1
++APP_VERSION_CODE=6597
++APP_VERSION_NAME=12.5.2
+ APP_PACKAGE=org.telegram.messenger
+ IS_PRIVATE=false
+ RELEASE_KEY_PASSWORD=android
+-- 
+2.53.0
+

@@ -1,4 +1,4 @@
-From b0edaa5d14be0e3d29960a5b207ef45e6ef26cfd Mon Sep 17 00:00:00 2001
+From 65c144b09088bf2eeb73552abad9eeea3b47f92e Mon Sep 17 00:00:00 2001
 From: LittleChest <hiya@littlew.top>
 Date: Fri, 3 Apr 2026 23:47:55 +0800
 Subject: Add Extra.java with safe version
@@ -23,7 +23,7 @@ index aa4284c1d..3ecb48ddb 100644
  google-services.json
 diff --git a/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
 new file mode 100644
-index 000000000..394398b14
+index 000000000..034f3e49a
 --- /dev/null
 +++ b/TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
 @@ -0,0 +1,150 @@
