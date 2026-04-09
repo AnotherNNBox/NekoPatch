@@ -59,6 +59,8 @@ jobs:
         echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> local.properties
         echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> local.properties
         echo "${{ secrets.GOOGLE_SERVICE }}" | base64 --decode > TMessagesProj_App/google-services.json
+        sed -i "s/public static int APP_ID = 442495;/public static int APP_ID = ${{ secrets.APP_ID }};/g" TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
+        sed -i "s/public static String APP_HASH = \"873ffaceba76e791ff2491224a3cdb49\";/public static String APP_HASH = \"${{ secrets.APP_HASH }}\";/g" TMessagesProj/src/main/java/tw/nekomimi/nekogram/Extra.java
 
     - name: Build
       run: |

@@ -42,8 +42,8 @@ index 000000000..394398b14
 +public class Extra {
 +
 +    // Nekogram
-+    public static int APP_ID = System.getenv("APP_ID") != null ? Integer.parseInt(System.getenv("APP_ID")) : 442495;
-+    public static String APP_HASH = System.getenv("APP_HASH") != null ? System.getenv("APP_HASH") : "873ffaceba76e791ff2491224a3cdb49";
++    public static int APP_ID = 442495;
++    public static String APP_HASH = "873ffaceba76e791ff2491224a3cdb49";
 +
 +    public static String PLAYSTORE_APP_URL = "https://nekogram.app/download";
 +
